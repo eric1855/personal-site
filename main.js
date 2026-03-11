@@ -8,11 +8,12 @@ import { createLocations }  from './src/entities/locations.js'
 import { createColliderWorld } from './src/physics/colliders.js'
 import { createUI }         from './src/ui/ui.js'
 import { createPopup }      from './src/ui/popup.js'
+import { createCollisionFlash } from './src/ui/collisionFlash.js'
 
 // Rendering
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
 
 // Input
 const { keys } = createInput()
@@ -27,9 +28,10 @@ const colliderWorld = createColliderWorld()
 // Car (pure kinematic — no physics engine)
 const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliderWorld)
 
-// HUD + popup
+// HUD + popup + collision VFX
 const { updateProximityPrompt } = createUI()
 const popup = createPopup(() => { isPaused = false })
+const { flash: collisionFlash } = createCollisionFlash()
 
 let isPaused     = false
 let prevInteract = false
@@ -62,6 +64,12 @@ function loop(now) {
   }
 
   carPostStep()
+
+  // Collision VFX — consume once per render frame
+  if (consumeCollision()) {
+    shakeCamera()
+    collisionFlash()
+  }
 
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
