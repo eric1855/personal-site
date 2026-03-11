@@ -1,9 +1,15 @@
 import * as THREE from 'three'
+import { createCarState, stepCar } from '../physics/carPhysics.js'
+import { stepPhysicsAndResolve } from '../physics/collision.js'
 
 // Dust constants
 const MAX_PARTICLES        = 120
 const PARTICLE_LIFETIME    = 35
 const EMIT_SPEED_THRESHOLD = 0.01
+const BURST_PARTICLE_COUNT = 18
+
+// Module-level reusable
+const _euler = new THREE.Euler()
 
 function buildCarMesh() {
   const group = new THREE.Group()
@@ -86,34 +92,84 @@ function buildDustSystem(scene) {
   return { geo, mat, positions, particles: [] }
 }
 
-/**
- * Creates the car mesh and dust system.
- * Physics is handled externally by carPhysics.js — this module only
- * provides the visual mesh and a postStep() to sync it.
- */
-export function createCar(scene) {
+export function createCar(scene, rapierCtx) {
   const { group: carGroup, flGroup, frGroup } = buildCarMesh()
   scene.add(carGroup)
 
-  const dust = buildDustSystem(scene)
+  const dust  = buildDustSystem(scene)
+  const state = createCarState()
 
-  /**
-   * Sync the Three.js mesh from the cannon-es carState.
-   * Called once per render frame.
-   */
-  function postStep(carState) {
-    // Sync mesh position + rotation from physics
-    carGroup.position.copy(carState.position)
-    carGroup.quaternion.copy(carState.quaternion)
+  const { RAPIER, world, carBody, carCollider } = rapierCtx
 
-    // Front wheel visual steering
-    flGroup.rotation.y = carState.steer
-    frGroup.rotation.y = carState.steer
+  // Track collision state for VFX
+  let collisionThisFrame = false
+  let impactSpeed = 0
 
-    _updateDust(dust, carState)
+  function preStep(keys) {
+    const prevSpeed = Math.abs(state.velocity)
+    stepCar(state, keys)
+
+    // Rapier collision detection + resolution
+    const hit = stepPhysicsAndResolve(RAPIER, world, carBody, carCollider, state)
+    if (hit && prevSpeed > 0.04) {
+      collisionThisFrame = true
+      impactSpeed = Math.max(impactSpeed, prevSpeed)
+    }
   }
 
-  return { carGroup, postStep }
+  function postStep() {
+    // Sync mesh from kinematic state
+    carGroup.position.copy(state.position)
+    _euler.set(0, state.rotation, 0)
+    carGroup.quaternion.setFromEuler(_euler)
+
+    // Front wheel visual steering
+    flGroup.rotation.y = state.steer
+    frGroup.rotation.y = state.steer
+
+    // Impact dust burst
+    if (collisionThisFrame) {
+      _emitBurst(dust, state)
+    }
+
+    _updateDust(dust, state)
+  }
+
+  /** Returns impact speed if collision occurred this frame, else 0. Resets flag. */
+  function consumeCollision() {
+    if (collisionThisFrame) {
+      collisionThisFrame = false
+      const spd = impactSpeed
+      impactSpeed = 0
+      return spd
+    }
+    return 0
+  }
+
+  return { carState: state, preStep, postStep, consumeCollision }
+}
+
+function _emitBurst(dust, state) {
+  const { position } = state
+  const { particles } = dust
+  for (let i = 0; i < BURST_PARTICLE_COUNT && particles.length < MAX_PARTICLES; i++) {
+    const angle = Math.random() * Math.PI * 2
+    const spd = 0.03 + Math.random() * 0.06
+    particles.push({
+      position: new THREE.Vector3(
+        position.x + (Math.random() - 0.5) * 1.2,
+        0.15 + Math.random() * 0.25,
+        position.z + (Math.random() - 0.5) * 1.2
+      ),
+      velocity: new THREE.Vector3(
+        Math.cos(angle) * spd,
+        0.02 + Math.random() * 0.04,
+        Math.sin(angle) * spd
+      ),
+      life: PARTICLE_LIFETIME,
+      maxLife: PARTICLE_LIFETIME,
+    })
+  }
 }
 
 function _updateDust(dust, state) {
