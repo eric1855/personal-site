@@ -67,7 +67,7 @@ function loop(now) {
   const impactSpeed = consumeCollision()
   if (impactSpeed > 0) {
     const MAX_SPEED = 0.18  // from carPhysics.js
-    const intensity = 0.08 + (impactSpeed / MAX_SPEED) * 0.25
+    const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
     shakeCamera(intensity)
   }
 
