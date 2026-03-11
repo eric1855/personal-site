@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { createCarState, stepCar } from '../physics/carPhysics.js'
-import { resolveCollisions } from '../physics/collision.js'
+import { stepPhysicsAndResolve } from '../physics/collision.js'
 
 // Dust constants
 const MAX_PARTICLES        = 120
@@ -92,12 +92,14 @@ function buildDustSystem(scene) {
   return { geo, mat, positions, particles: [] }
 }
 
-export function createCar(scene, colliders) {
+export function createCar(scene, rapierCtx) {
   const { group: carGroup, flGroup, frGroup } = buildCarMesh()
   scene.add(carGroup)
 
   const dust  = buildDustSystem(scene)
   const state = createCarState()
+
+  const { RAPIER, world, carBody, carCollider } = rapierCtx
 
   // Track collision state for VFX
   let collisionThisFrame = false
@@ -107,13 +109,11 @@ export function createCar(scene, colliders) {
     const prevSpeed = Math.abs(state.velocity)
     stepCar(state, keys)
 
-    // Collision detection + resolution
-    if (colliders && colliders.length > 0) {
-      const hit = resolveCollisions(state, colliders)
-      if (hit && prevSpeed > 0.04) {
-        collisionThisFrame = true
-        impactSpeed = Math.max(impactSpeed, prevSpeed)
-      }
+    // Rapier collision detection + resolution
+    const hit = stepPhysicsAndResolve(RAPIER, world, carBody, carCollider, state)
+    if (hit && prevSpeed > 0.04) {
+      collisionThisFrame = true
+      impactSpeed = Math.max(impactSpeed, prevSpeed)
     }
   }
 
@@ -150,7 +150,7 @@ export function createCar(scene, colliders) {
 }
 
 function _emitBurst(dust, state) {
-  const { position, rotation } = state
+  const { position } = state
   const { particles } = dust
   for (let i = 0; i < BURST_PARTICLE_COUNT && particles.length < MAX_PARTICLES; i++) {
     const angle = Math.random() * Math.PI * 2

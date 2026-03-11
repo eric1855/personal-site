@@ -1,15 +1,13 @@
 import RAPIER from '@dimforge/rapier3d-compat'
 
+/**
+ * Initialise the Rapier WASM module and create a physics world.
+ * Gravity is zero — the car is kinematic and never falls.
+ */
 export async function createPhysicsEngine() {
-  // WASM must be initialized before any RAPIER objects are created
   await RAPIER.init()
 
-  // Gravity matches Scene.tsx: gravity={[0, -20, 0]}
-  const world = new RAPIER.World({ x: 0, y: -20, z: 0 })
+  const world = new RAPIER.World({ x: 0, y: 0, z: 0 })
 
-  function step() {
-    world.step()
-  }
-
-  return { RAPIER, world, step }
+  return { RAPIER, world }
 }

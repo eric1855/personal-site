@@ -5,9 +5,13 @@ import { createInput }      from './src/core/input.js'
 import { createCar }        from './src/entities/car.js'
 import { createWorldObjects } from './src/entities/worldObjects.js'
 import { createLocations }  from './src/entities/locations.js'
+import { createPhysicsEngine } from './src/physics/engine.js'
 import { createColliderWorld } from './src/physics/colliders.js'
 import { createUI }         from './src/ui/ui.js'
 import { createPopup }      from './src/ui/popup.js'
+
+// Boot — Rapier WASM must be initialised before anything else
+const { RAPIER, world } = await createPhysicsEngine()
 
 // Rendering
 const { renderer } = createRenderer()
@@ -21,11 +25,12 @@ const { keys } = createInput()
 createWorldObjects(scene)
 const { locations } = createLocations(scene)
 
-// Collision world
-const { colliders } = createColliderWorld()
+// Rapier colliders (buildings, trees, boundary walls) + car body
+const { carBody, carCollider } = createColliderWorld(RAPIER, world)
 
-// Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
+// Car (kinematic movement + Rapier collision detection)
+const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } =
+  createCar(scene, { RAPIER, world, carBody, carCollider })
 
 // HUD + popup
 const { updateProximityPrompt } = createUI()

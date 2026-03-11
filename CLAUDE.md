@@ -8,11 +8,11 @@ Drive near a building and press E to open it as a popup.
 ## Stack
 - **Vite** + vanilla JS (ESM modules), no React, no TypeScript
 - **Three.js** for 3D rendering
-- No physics engine — car uses pure kinematic math with OBB collision via SAT
+- **Rapier** (`@dimforge/rapier3d-compat`) for collision detection (hybrid kinematic approach)
 
 ## File Structure
 ```
-main.js                   game loop, wires everything together
+main.js                   game loop, wires everything together (async init for Rapier)
 src/core/
   renderer.js             WebGL renderer setup
   scene.js                lights, fog, background
@@ -20,12 +20,13 @@ src/core/
   input.js                keyboard state (WASD + E)
 src/entities/
   car.js                  car mesh + kinematic step + dust particles + collision dust burst
-  worldObjects.js         ground mesh + trees
-  locations.js            portfolio buildings (mesh only, no physics)
+  worldObjects.js         ground mesh + trees (visual only)
+  locations.js            portfolio buildings (visual mesh only)
 src/physics/
-  carPhysics.js           kinematic car state + stepCar()
-  colliders.js            collider registry — AABB (buildings) + circle (trees)
-  collision.js            OBB-vs-AABB and OBB-vs-Circle SAT detection + resolution
+  engine.js               Rapier WASM init + world creation (zero gravity)
+  carPhysics.js           kinematic car state + stepCar() (pure math, no Rapier)
+  colliders.js            Rapier collider world — car (kinematic body), buildings (fixed cuboids), trees (fixed cylinders), boundary walls
+  collision.js            Rapier-based collision detection + resolution (push-out + velocity damping)
 src/ui/
   ui.js                   proximity HUD prompt
   popup.js                location content popup
@@ -33,27 +34,31 @@ src/ui/
 
 ## Car Design
 - WASD / arrow keys: W/S = forward/backward, A/D = steer
-- Pure kinematic: position/heading updated with math each step — no physics engine, no bouncing
+- Hybrid kinematic: position/heading updated with pure math each step, collision detection via Rapier
 - Fixed Y height (GROUND_Y = 0.3), never falls or bounces
 - Front wheels visually steer (Y rotation). No wheel spin (user preference).
 - Dust particles emit from rear when moving
 
-## Collision System
-- **OBB (Oriented Bounding Box)** for the car: half-extents (0.5, 0.95) — matches the 1.0 x 1.9 body
-- **SAT (Separating Axis Theorem)** for detection against:
-  - **AABB colliders** for buildings (4 axes: car-localX, car-localZ, world-X, world-Z)
-  - **Circle colliders** for trees (closest-point-on-OBB method, radius 0.8)
-- **Resolution**: push car out along minimum-penetration axis, zero normal velocity component (slide along walls, no bounce)
-- **World boundary**: car is clamped to |x| < 140, |z| < 140
+## Collision System — Rapier Hybrid
+- **Car** = Rapier `KinematicPositionBased` rigid body + cuboid collider (half-extents 0.5 x 50 x 0.95)
+- **Movement** = pure kinematic math in `stepCar()` — no Rapier forces
+- **Detection** = Rapier broadphase/narrowphase via `contactPairsWith()` + `contactPair()`
+- **Resolution** = push car out along contact normal by penetration depth, zero velocity component into wall (slide, no bounce)
+- **Buildings** = fixed Rapier cuboids matching visual mesh dimensions
+- **Trees** = fixed Rapier cylinders (radius 0.5)
+- **World boundary** = 4 invisible wall cuboids at |x|/|z| = 140
+- **Y trick**: all colliders share the same Y center (GROUND_Y) and a large half-height (50) so Rapier's SAT always produces XZ normals, never vertical push
+- **Active collision types**: `KINEMATIC_FIXED` explicitly enabled (Rapier skips kinematic-vs-fixed by default)
 - **VFX**: camera shake (intensity scales with impact speed) + dust burst on impact
 - Collision runs after `stepCar()` in `preStep()`, before mesh sync
 
 ## Game Loop
 Fixed-timestep accumulator at 60 Hz decoupled from display framerate:
 ```
+await Rapier WASM init (top-level await)
 accumulate real delta time
 while (accumulator >= 1/60):
-  preStep(keys)   ← advance kinematic car state + resolve collisions
+  preStep(keys)   ← stepCar() + stepPhysicsAndResolve()
   accumulator -= 1/60
 postStep()         ← sync mesh from state (once per render frame)
 consume collision  ← trigger camera shake if impact occurred
@@ -68,4 +73,5 @@ camera update → render
 - Module-level THREE reusables (`_euler`, `_quat`) — avoid per-frame allocation
 - `carState` object is the single source of truth for car position/rotation/speed
 - Proximity detection is pure distance math — no physics colliders needed for buildings
-- Collision uses pure math (SAT) — no physics engine
+- Collision uses Rapier for detection, pure math for resolution
+- `vite.config.js` targets `esnext` for top-level `await` (Rapier WASM init)

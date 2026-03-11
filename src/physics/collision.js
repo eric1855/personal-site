@@ -1,183 +1,118 @@
 /**
- * OBB (Oriented Bounding Box) collision detection using SAT (Separating Axis Theorem).
+ * Rapier-based collision detection for the kinematic car.
  *
- * The car is modelled as an OBB. Buildings are AABBs, trees are circles.
- * Resolution: push the car out along the minimum-penetration axis,
- * then zero the velocity component in the collision normal direction (slide, no bounce).
+ * After moving the car body with setNextKinematicTranslation + setNextKinematicRotation,
+ * we step the Rapier world and then inspect contacts via contactPairsWith / contactPair.
+ *
+ * For each contact manifold we compute the push-out vector and adjust the car velocity
+ * so it slides along walls (no bounce). This mirrors the old SAT approach but uses
+ * Rapier's broadphase/narrowphase for detection.
  */
 
-// Car half-extents (local X = width, local Z = length)
-const CAR_HW = 0.5    // half-width  (body 1.0 wide)
-const CAR_HD = 0.95   // half-depth  (body 1.9 long)
-
-// World boundary
-const WORLD_BOUND = 140
+import { GROUND_Y } from './carPhysics.js'
 
 /**
- * Resolve all collisions for the car against the collider world.
- * Mutates state.position and state.velocity in-place.
- * Returns true if any collision occurred this frame (used for VFX).
+ * Move the kinematic car body to its new position, step the physics world,
+ * then detect and resolve any collisions.
+ *
+ * @param {object} RAPIER      - the Rapier module
+ * @param {object} world       - Rapier world
+ * @param {object} carBody     - Rapier kinematic rigid body for the car
+ * @param {object} carCollider - Rapier collider attached to carBody
+ * @param {object} state       - carState (position, rotation, velocity)
+ * @returns {boolean} true if any collision occurred
  */
-export function resolveCollisions(state, colliders) {
+export function stepPhysicsAndResolve(RAPIER, world, carBody, carCollider, state) {
+  // 1. Tell Rapier where the car wants to be
+  carBody.setNextKinematicTranslation({
+    x: state.position.x,
+    y: GROUND_Y,
+    z: state.position.z,
+  })
+
+  // Set rotation (Y-axis only) as quaternion
+  const halfAngle = state.rotation * 0.5
+  carBody.setNextKinematicRotation({
+    x: 0,
+    y: Math.sin(halfAngle),
+    z: 0,
+    w: Math.cos(halfAngle),
+  })
+
+  // 2. Step Rapier — this performs broadphase + narrowphase
+  world.step()
+
+  // 3. Check all contacts involving the car collider
   let hit = false
+  let totalPushX = 0
+  let totalPushZ = 0
 
-  // Precompute car OBB axes from heading
-  const cosR = Math.cos(state.rotation)
-  const sinR = Math.sin(state.rotation)
+  world.contactPairsWith(carCollider, (otherCollider) => {
+    world.contactPair(carCollider, otherCollider, (manifold, flipped) => {
+      // manifold.normal() is the world-space contact normal.
+      // When flipped is false: normal points from collider1 (car) toward collider2 (obstacle).
+      // When flipped is true: normal points from collider2 (obstacle) toward collider1 (car).
+      //
+      // We want the push direction: push the car AWAY from the obstacle.
+      // So we need the normal pointing from obstacle toward car.
+      //   - flipped=false → normal points car→obstacle → negate it
+      //   - flipped=true  → normal points obstacle→car → keep it
+      const normal = manifold.normal()
+      const sign = flipped ? 1 : -1
+      let pushNx = normal.x * sign
+      let pushNz = normal.z * sign
 
-  // Car local X-axis in world space (right)
-  const axX = cosR,  axZ = -sinR
-  // Car local Z-axis in world space (forward)
-  const azX = sinR,  azZ = cosR
-
-  for (const c of colliders) {
-    let result = null
-    if (c.type === 'aabb') {
-      result = _obbVsAABB(state, axX, axZ, azX, azZ, c)
-    } else if (c.type === 'circle') {
-      result = _obbVsCircle(state, axX, axZ, azX, azZ, c)
-    }
-    if (result) {
-      // Push car out
-      state.position.x += result.nx * result.depth
-      state.position.z += result.nz * result.depth
-
-      // Zero velocity in the collision normal direction (slide, no bounce)
-      // velocity is scalar along heading, so project heading onto normal
-      const headX = Math.sin(state.rotation)
-      const headZ = Math.cos(state.rotation)
-      const dot = headX * result.nx + headZ * result.nz
-      if (dot * state.velocity > 0) {
-        // Moving into the wall — remove the normal component of velocity
-        // Since velocity is scalar * heading, we scale it down
-        const factor = Math.abs(dot)
-        state.velocity *= (1 - factor)
+      // Find deepest penetration from contact distances
+      // contactDist is negative when penetrating
+      let maxPen = 0
+      const n = manifold.numContacts()
+      for (let i = 0; i < n; i++) {
+        const dist = manifold.contactDist(i)
+        if (dist < 0) {
+          maxPen = Math.max(maxPen, -dist)
+        }
       }
 
-      hit = true
-    }
-  }
+      if (maxPen > 0.0001) {
+        // Normalise push direction in XZ plane
+        const len = Math.sqrt(pushNx * pushNx + pushNz * pushNz)
+        if (len > 0.0001) {
+          pushNx /= len
+          pushNz /= len
 
-  // ── World boundary ──────────────────────────────────────────
-  if (state.position.x > WORLD_BOUND) {
-    state.position.x = WORLD_BOUND
-    _clampVelocityAxis(state, 1, 0)
-    hit = true
-  } else if (state.position.x < -WORLD_BOUND) {
-    state.position.x = -WORLD_BOUND
-    _clampVelocityAxis(state, -1, 0)
-    hit = true
-  }
-  if (state.position.z > WORLD_BOUND) {
-    state.position.z = WORLD_BOUND
-    _clampVelocityAxis(state, 0, 1)
-    hit = true
-  } else if (state.position.z < -WORLD_BOUND) {
-    state.position.z = -WORLD_BOUND
-    _clampVelocityAxis(state, 0, -1)
-    hit = true
+          totalPushX += pushNx * maxPen
+          totalPushZ += pushNz * maxPen
+
+          // Zero the velocity component going INTO the wall (slide, no bounce).
+          // velocity vector = heading * scalar_velocity.
+          // Component along push normal = velocity * dot(heading, pushNormal).
+          // Negative → moving into wall → kill that component.
+          const headX = Math.sin(state.rotation)
+          const headZ = Math.cos(state.rotation)
+          const dot = headX * pushNx + headZ * pushNz
+          if (dot * state.velocity < 0) {
+            state.velocity *= (1 - Math.abs(dot))
+          }
+
+          hit = true
+        }
+      }
+    })
+  })
+
+  // 4. Apply accumulated push-out
+  if (hit) {
+    state.position.x += totalPushX
+    state.position.z += totalPushZ
+    state.position.y = GROUND_Y
+
+    // Re-sync the body position after push-out so next frame starts clean
+    carBody.setNextKinematicTranslation({
+      x: state.position.x,
+      y: GROUND_Y,
+      z: state.position.z,
+    })
   }
 
   return hit
-}
-
-/** Zero the velocity component along a world-axis normal */
-function _clampVelocityAxis(state, nx, nz) {
-  const headX = Math.sin(state.rotation)
-  const headZ = Math.cos(state.rotation)
-  const dot = headX * nx + headZ * nz
-  if (dot * state.velocity > 0) {
-    state.velocity *= (1 - Math.abs(dot))
-  }
-}
-
-// ─── OBB vs AABB (SAT) ─────────────────────────────────────────
-
-/**
- * Returns { nx, nz, depth } for the minimum penetration axis, or null if separated.
- * We test 4 axes: car-localX, car-localZ, world-X, world-Z.
- */
-function _obbVsAABB(state, axX, axZ, azX, azZ, aabb) {
-  // Vector from car center to AABB center
-  const dx = aabb.cx - state.position.x
-  const dz = aabb.cz - state.position.z
-
-  let minDepth = Infinity
-  let minNx = 0, minNz = 0
-
-  // Test each of the 4 separating axes
-  const axes = [
-    { nx: axX,  nz: axZ,  label: 'carX' },
-    { nx: azX,  nz: azZ,  label: 'carZ' },
-    { nx: 1,    nz: 0,    label: 'worldX' },
-    { nx: 0,    nz: 1,    label: 'worldZ' },
-  ]
-
-  for (const axis of axes) {
-    // Project car OBB onto axis
-    const carProj = Math.abs(CAR_HW * (axX * axis.nx + axZ * axis.nz))
-                  + Math.abs(CAR_HD * (azX * axis.nx + azZ * axis.nz))
-    // Project AABB onto axis
-    const aabbProj = Math.abs(aabb.hw * axis.nx) + Math.abs(aabb.hd * axis.nz)
-    // Distance between centers projected onto axis
-    const dist = Math.abs(dx * axis.nx + dz * axis.nz)
-
-    const overlap = carProj + aabbProj - dist
-    if (overlap <= 0) return null  // separating axis found → no collision
-
-    if (overlap < minDepth) {
-      minDepth = overlap
-      // Normal should push car AWAY from AABB
-      const sign = (dx * axis.nx + dz * axis.nz) > 0 ? -1 : 1
-      minNx = axis.nx * sign
-      minNz = axis.nz * sign
-    }
-  }
-
-  return { nx: minNx, nz: minNz, depth: minDepth }
-}
-
-// ─── OBB vs Circle (SAT) ────────────────────────────────────────
-
-/**
- * For OBB vs circle we find the closest point on the OBB to the circle center,
- * then check distance. This is equivalent to SAT for convex vs circle.
- */
-function _obbVsCircle(state, axX, axZ, azX, azZ, circle) {
-  // Vector from car center to circle center
-  const dx = circle.cx - state.position.x
-  const dz = circle.cz - state.position.z
-
-  // Project delta onto car local axes
-  let localX = dx * axX + dz * axZ
-  let localZ = dx * azX + dz * azZ
-
-  // Clamp to OBB half-extents to find closest point on OBB
-  const clampedX = Math.max(-CAR_HW, Math.min(CAR_HW, localX))
-  const clampedZ = Math.max(-CAR_HD, Math.min(CAR_HD, localZ))
-
-  // Closest point on OBB in world space
-  const closestX = state.position.x + clampedX * axX + clampedZ * azX
-  const closestZ = state.position.z + clampedX * axZ + clampedZ * azZ
-
-  // Distance from closest point to circle center
-  const toCircleX = circle.cx - closestX
-  const toCircleZ = circle.cz - closestZ
-  const distSq = toCircleX * toCircleX + toCircleZ * toCircleZ
-  const rSq = circle.r * circle.r
-
-  if (distSq >= rSq) return null  // no collision
-
-  const dist = Math.sqrt(distSq)
-  if (dist < 0.0001) {
-    // Car center is exactly at circle center — push along arbitrary axis
-    return { nx: -Math.sin(state.rotation), nz: -Math.cos(state.rotation), depth: circle.r }
-  }
-
-  const depth = circle.r - dist
-  // Normal points from circle toward car (push car out)
-  const nx = -toCircleX / dist
-  const nz = -toCircleZ / dist
-
-  return { nx, nz, depth }
 }
