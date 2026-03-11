@@ -8,55 +8,60 @@ Drive near a building and press E to open it as a popup.
 ## Stack
 - **Vite** + vanilla JS (ESM modules), no React, no TypeScript
 - **Three.js** for 3D rendering
-- No physics engine — car uses pure kinematic math with OBB collision via SAT
+- **Rapier** (`@dimforge/rapier3d-compat`) for physics — dynamic vehicle body + static colliders
 
 ## File Structure
 ```
-main.js                   game loop, wires everything together
+main.js                   game loop (async init), wires everything together
 src/core/
   renderer.js             WebGL renderer setup
   scene.js                lights, fog, background
   camera.js               follow camera (fixed world-space offset) + shake effect
   input.js                keyboard state (WASD + E)
 src/entities/
-  car.js                  car mesh + kinematic step + dust particles + collision dust burst
-  worldObjects.js         ground mesh + trees
-  locations.js            portfolio buildings (mesh only, no physics)
+  car.js                  car mesh + dust particles, delegates physics to carPhysics.js
+  worldObjects.js         ground mesh + 28 trees (exports TREE_POSITIONS)
+  locations.js            portfolio buildings (exports LOCATION_DEFS)
 src/physics/
-  carPhysics.js           kinematic car state + stepCar()
-  colliders.js            collider registry — AABB (buildings) + circle (trees)
-  collision.js            OBB-vs-AABB and OBB-vs-Circle SAT detection + resolution
+  rapierWorld.js          Rapier WASM init, world creation, static collider helpers
+  carPhysics.js           Rapier dynamic body car — forces, torque, lateral grip
 src/ui/
   ui.js                   proximity HUD prompt
   popup.js                location content popup
 ```
 
+## Physics System (Rapier)
+- **Rapier World**: gravity `{0, -30, 0}`, stepped at 60 Hz in the game loop
+- **Car**: dynamic RigidBody with cuboid collider (half-extents 0.5, 0.19, 0.95)
+  - Movement via `addForce()` in forward direction
+  - Steering via `applyTorqueImpulse()` around Y axis, scaled by speed
+  - Lateral grip: ~92% of sideways velocity cancelled each step (tire friction simulation)
+  - Rotation locked to Y-axis: `enabledRotations(false, true, false)`
+  - Speed clamped to MAX_SPEED = 22
+- **Buildings**: fixed RigidBody + cuboid colliders (dimensions from LOCATION_DEFS bodySize)
+- **Trees**: fixed RigidBody + cylinder colliders (radius 0.5, half-height 2.0)
+- **Ground**: fixed cuboid collider (150 x 0.5 x 150, top surface at y=0)
+- **Boundary walls**: fixed cuboid colliders at |x|=141, |z|=141
+
+## Car State
+`carState` object exposes: `position` (THREE.Vector3), `rotation` (heading angle), `velocity` (signed scalar), `speed` (absolute), `steer` (visual steer angle).
+Synced from Rapier body each frame in `postStep()`.
+
 ## Car Design
 - WASD / arrow keys: W/S = forward/backward, A/D = steer
-- Pure kinematic: position/heading updated with math each step — no physics engine, no bouncing
-- Fixed Y height (GROUND_Y = 0.3), never falls or bounces
 - Front wheels visually steer (Y rotation). No wheel spin (user preference).
 - Dust particles emit from rear when moving
-
-## Collision System
-- **OBB (Oriented Bounding Box)** for the car: half-extents (0.5, 0.95) — matches the 1.0 x 1.9 body
-- **SAT (Separating Axis Theorem)** for detection against:
-  - **AABB colliders** for buildings (4 axes: car-localX, car-localZ, world-X, world-Z)
-  - **Circle colliders** for trees (closest-point-on-OBB method, radius 0.8)
-- **Resolution**: push car out along minimum-penetration axis, zero normal velocity component (slide along walls, no bounce)
-- **World boundary**: car is clamped to |x| < 140, |z| < 140
-- **VFX**: camera shake (intensity scales with impact speed) + dust burst on impact
-- Collision runs after `stepCar()` in `preStep()`, before mesh sync
 
 ## Game Loop
 Fixed-timestep accumulator at 60 Hz decoupled from display framerate:
 ```
+await Rapier init (top-level await)
 accumulate real delta time
 while (accumulator >= 1/60):
-  preStep(keys)   ← advance kinematic car state + resolve collisions
+  carPreStep(keys)   ← apply forces/torque to Rapier body
+  stepPhysics()      ← Rapier world.step()
   accumulator -= 1/60
-postStep()         ← sync mesh from state (once per render frame)
-consume collision  ← trigger camera shake if impact occurred
+carPostStep(keys)    ← sync carState from Rapier, sync Three.js mesh
 camera update → render
 ```
 
@@ -67,5 +72,5 @@ camera update → render
 - One named export per file (`createX` factory pattern)
 - Module-level THREE reusables (`_euler`, `_quat`) — avoid per-frame allocation
 - `carState` object is the single source of truth for car position/rotation/speed
-- Proximity detection is pure distance math — no physics colliders needed for buildings
-- Collision uses pure math (SAT) — no physics engine
+- Proximity detection is pure distance math — no physics colliders needed for building interaction
+- All collision detection handled by Rapier — no manual SAT

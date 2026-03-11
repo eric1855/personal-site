@@ -1,31 +1,48 @@
-import { createRenderer }   from './src/core/renderer.js'
-import { createScene }      from './src/core/scene.js'
-import { createCamera }     from './src/core/camera.js'
-import { createInput }      from './src/core/input.js'
-import { createCar }        from './src/entities/car.js'
-import { createWorldObjects } from './src/entities/worldObjects.js'
-import { createLocations }  from './src/entities/locations.js'
-import { createColliderWorld } from './src/physics/colliders.js'
-import { createUI }         from './src/ui/ui.js'
-import { createPopup }      from './src/ui/popup.js'
+import { createRenderer }     from './src/core/renderer.js'
+import { createScene }        from './src/core/scene.js'
+import { createCamera }       from './src/core/camera.js'
+import { createInput }        from './src/core/input.js'
+import { createCar }          from './src/entities/car.js'
+import { createWorldObjects, TREE_POSITIONS } from './src/entities/worldObjects.js'
+import { createLocations, LOCATION_DEFS }     from './src/entities/locations.js'
+import { createUI }           from './src/ui/ui.js'
+import { createPopup }        from './src/ui/popup.js'
+import { createRapierWorld }  from './src/physics/rapierWorld.js'
+
+// ── Async init (Rapier WASM must load before anything else) ──────
+const { RAPIER, world, step: stepPhysics, addGround, addBuilding, addTree, addBoundaryWalls } = await createRapierWorld()
 
 // Rendering
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
 
 // Input
 const { keys } = createInput()
 
-// World
+// World meshes
 createWorldObjects(scene)
 const { locations } = createLocations(scene)
 
-// Collision world
-const { colliders } = createColliderWorld()
+// ── Rapier static colliders ──────────────────────────────────────
+addGround()
+addBoundaryWalls()
 
-// Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
+// Buildings
+for (const def of LOCATION_DEFS) {
+  addBuilding(
+    def.position.x, def.bodyY,  def.position.z,
+    def.bodySize.w / 2, def.bodySize.h / 2, def.bodySize.d / 2
+  )
+}
+
+// Trees
+for (const [x, , z] of TREE_POSITIONS) {
+  addTree(x, z, 0.5)
+}
+
+// Car (Rapier dynamic body)
+const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, RAPIER, world)
 
 // HUD + popup
 const { updateProximityPrompt } = createUI()
@@ -44,7 +61,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix()
 })
 
-// Fixed-timestep game loop — physics always runs at 60 Hz regardless of display framerate
+// Fixed-timestep game loop — physics always runs at 60 Hz
 const FIXED_DT  = 1 / 60
 let prevTime    = performance.now()
 let accumulator = 0
@@ -52,24 +69,19 @@ let accumulator = 0
 function loop(now) {
   requestAnimationFrame(loop)
 
-  const elapsed = Math.min((now - prevTime) / 1000, 0.05) // cap at 50 ms (tab-blur recovery)
+  const elapsed = Math.min((now - prevTime) / 1000, 0.05)
   prevTime      = now
   accumulator  += elapsed
 
   while (accumulator >= FIXED_DT) {
-    if (!isPaused) carPreStep(keys)
+    if (!isPaused) {
+      carPreStep(keys)
+      stepPhysics()
+    }
     accumulator -= FIXED_DT
   }
 
-  carPostStep()
-
-  // Camera shake on collision (scale intensity by impact speed)
-  const impactSpeed = consumeCollision()
-  if (impactSpeed > 0) {
-    const MAX_SPEED = 0.18  // from carPhysics.js
-    const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
-    shakeCamera(intensity)
-  }
+  carPostStep(keys)
 
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)

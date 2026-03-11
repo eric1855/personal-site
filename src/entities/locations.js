@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-const LOCATION_DEFS = [
+export const LOCATION_DEFS = [
   {
     id: 'about',
     label: 'About Me',

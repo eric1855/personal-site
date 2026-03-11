@@ -1,11 +1,19 @@
 import * as THREE from 'three'
 
+// Tree positions exported so Rapier colliders can reference them
+export const TREE_POSITIONS = [
+  [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
+  [-10, 0, 30],  [30, 0, 5],  [-35, 0, -5], [12, 0, -30],
+  [-20, 0, -40], [35, 0, -25], [-40, 0, 20], [25, 0, 40],
+  [-8, 0, -15],  [14, 0, 8],  [-18, 0, 18], [28, 0, -10],
+  [-30, 0, 35],  [40, 0, 15], [-45, 0, -15], [22, 0, -45],
+  [-12, 0, 45],  [38, 0, -40], [-50, 0, 8],  [16, 0, 50],
+  [-22, 0, -52], [44, 0, 28], [-38, 0, -30], [10, 0, -48],
+]
+
 export function createWorldObjects(scene) {
   _createGround(scene)
   _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
 }
 
 function _createGround(scene) {
@@ -19,19 +27,7 @@ function _createGround(scene) {
 }
 
 function _createTrees(scene) {
-  // All 28 positions from Scene.tsx — exact values
-  const treePositions = [
-    [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
-    [-10, 0, 30],  [30, 0, 5],  [-35, 0, -5], [12, 0, -30],
-    [-20, 0, -40], [35, 0, -25], [-40, 0, 20], [25, 0, 40],
-    [-8, 0, -15],  [14, 0, 8],  [-18, 0, 18], [28, 0, -10],
-    [-30, 0, 35],  [40, 0, 15], [-45, 0, -15], [22, 0, -45],
-    [-12, 0, 45],  [38, 0, -40], [-50, 0, 8],  [16, 0, 50],
-    [-22, 0, -52], [44, 0, 28], [-38, 0, -30], [10, 0, -48],
-  ]
-
-  treePositions.forEach(([x, y, z], i) => {
-    // Same scale formula and color selection as Scene.tsx
+  TREE_POSITIONS.forEach(([x, y, z], i) => {
     const scale      = 0.8 + Math.sin(i * 7.3) * 0.4
     const greenShade = i % 3 === 0 ? '#2d6a4f' : i % 3 === 1 ? '#40916c' : '#52b788'
 
@@ -48,7 +44,7 @@ function _createTrees(scene) {
     trunk.castShadow = true
     group.add(trunk)
 
-    // 3-tier foliage — [radius, height, segments, y-position]
+    // 3-tier foliage
     const tiers = [[1.2, 2.0, 6, 2.4], [0.9, 1.6, 6, 3.6], [0.5, 1.2, 5, 4.5]]
     const foliageMat = new THREE.MeshStandardMaterial({ color: greenShade, flatShading: true })
     tiers.forEach(([r, h, seg, py]) => {
