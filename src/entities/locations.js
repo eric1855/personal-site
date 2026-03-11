@@ -83,11 +83,31 @@ function _buildLocationMesh(def) {
   return group
 }
 
-export function createLocations(scene) {
+export function createLocations(scene, RAPIER, world) {
   const locations = []
 
   for (const def of LOCATION_DEFS) {
     scene.add(_buildLocationMesh(def))
+
+    // Rapier static collider for each building
+    const buildingBody = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(
+        def.position.x,
+        def.bodyY,
+        def.position.z
+      )
+    )
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(
+        def.bodySize.w / 2,
+        def.bodySize.h / 2,
+        def.bodySize.d / 2
+      )
+        .setFriction(0.3)
+        .setRestitution(0.15),
+      buildingBody
+    )
+
     locations.push({
       id:       def.id,
       label:    def.label,

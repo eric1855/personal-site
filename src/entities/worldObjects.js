@@ -1,14 +1,12 @@
 import * as THREE from 'three'
 
-export function createWorldObjects(scene) {
-  _createGround(scene)
-  _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
+export function createWorldObjects(scene, RAPIER, world) {
+  _createGround(scene, RAPIER, world)
+  _createTrees(scene, RAPIER, world)
+  _createWorldBoundary(RAPIER, world)
 }
 
-function _createGround(scene) {
+function _createGround(scene, RAPIER, world) {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: '#4a7c59', side: THREE.DoubleSide, flatShading: true })
@@ -16,9 +14,20 @@ function _createGround(scene) {
   mesh.rotation.x = -Math.PI / 2
   mesh.receiveShadow = true
   scene.add(mesh)
+
+  // Rapier static ground collider — thin cuboid at y=0
+  const groundBody = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5, 0)
+  )
+  world.createCollider(
+    RAPIER.ColliderDesc.cuboid(150, 0.5, 150)
+      .setFriction(0.8)
+      .setRestitution(0.0),
+    groundBody
+  )
 }
 
-function _createTrees(scene) {
+function _createTrees(scene, RAPIER, world) {
   // All 28 positions from Scene.tsx — exact values
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
@@ -59,5 +68,45 @@ function _createTrees(scene) {
     })
 
     scene.add(group)
+
+    // Rapier static cylinder collider for the trunk
+    // Use a cylinder with radius proportional to the tree scale
+    const trunkRadius = 0.4 * scale
+    const trunkHeight = 2.5 * scale
+    const treeBody = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(x, trunkHeight / 2, z)
+    )
+    world.createCollider(
+      RAPIER.ColliderDesc.cylinder(trunkHeight / 2, trunkRadius)
+        .setFriction(0.3)
+        .setRestitution(0.2),
+      treeBody
+    )
   })
+}
+
+function _createWorldBoundary(RAPIER, world) {
+  // 4 invisible walls at the edges of the playable area
+  const BOUND = 140
+  const WALL_THICKNESS = 2
+  const WALL_HEIGHT = 10
+
+  const walls = [
+    { x:  BOUND + WALL_THICKNESS / 2, z: 0, hw: WALL_THICKNESS / 2, hd: BOUND },  // +X wall
+    { x: -BOUND - WALL_THICKNESS / 2, z: 0, hw: WALL_THICKNESS / 2, hd: BOUND },  // -X wall
+    { x: 0, z:  BOUND + WALL_THICKNESS / 2, hw: BOUND, hd: WALL_THICKNESS / 2 },  // +Z wall
+    { x: 0, z: -BOUND - WALL_THICKNESS / 2, hw: BOUND, hd: WALL_THICKNESS / 2 },  // -Z wall
+  ]
+
+  for (const w of walls) {
+    const wallBody = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed().setTranslation(w.x, WALL_HEIGHT / 2, w.z)
+    )
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(w.hw, WALL_HEIGHT / 2, w.hd)
+        .setFriction(0.3)
+        .setRestitution(0.1),
+      wallBody
+    )
+  }
 }
