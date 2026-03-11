@@ -5,6 +5,7 @@ import { createInput }      from './src/core/input.js'
 import { createCar }        from './src/entities/car.js'
 import { createWorldObjects } from './src/entities/worldObjects.js'
 import { createLocations }  from './src/entities/locations.js'
+import { createColliderWorld } from './src/physics/colliders.js'
 import { createUI }         from './src/ui/ui.js'
 import { createPopup }      from './src/ui/popup.js'
 
@@ -20,8 +21,11 @@ const { keys } = createInput()
 createWorldObjects(scene)
 const { locations } = createLocations(scene)
 
-// Car (pure kinematic — no physics engine)
-const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene)
+// Collision world
+const { colliders } = createColliderWorld()
+
+// Car (pure kinematic — no physics engine, OBB collision via SAT)
+const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, colliders)
 
 // HUD + popup
 const { updateProximityPrompt } = createUI()
