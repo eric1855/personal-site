@@ -1,23 +1,14 @@
 import * as THREE from 'three'
+import { createCarState, stepCar } from '../physics/carPhysics.js'
+import { resolveCollisions } from '../physics/collision.js'
 
-// Physics constants — from Car.tsx
-const ACCELERATION   = 0.02
-const MAX_SPEED      = 0.4
-const REVERSE_SPEED  = 0.18
-const FRICTION       = 0.88
-const STEER_SPEED    = 0.032   // radians/frame
-const MAX_STEER_VIS  = 0.5     // max visual front-wheel steer angle (radians)
-const STEER_VIS_LERP = 0.14    // how fast the visual wheels animate
-const GROUND_Y       = 0.28
-
-// Dust constants — from DustParticles.tsx
+// Dust constants
 const MAX_PARTICLES        = 120
 const PARTICLE_LIFETIME    = 35
 const EMIT_SPEED_THRESHOLD = 0.01
 
-// Module-level reusables
+// Module-level reusable
 const _euler = new THREE.Euler()
-const _quat  = new THREE.Quaternion()
 
 function buildCarMesh() {
   const group = new THREE.Group()
@@ -57,25 +48,20 @@ function buildCarMesh() {
   // Headlights
   const hlMat = new THREE.MeshStandardMaterial({ color: '#ffffcc', emissive: '#ffff88', emissiveIntensity: 0.5 })
   const hlGeo = new THREE.BoxGeometry(0.2, 0.1, 0.05)
-  const hlL = new THREE.Mesh(hlGeo, hlMat)
-  hlL.position.set(-0.3, 0.04, 0.96)
-  const hlR = new THREE.Mesh(hlGeo, hlMat)
-  hlR.position.set(0.3, 0.04, 0.96)
+  const hlL = new THREE.Mesh(hlGeo, hlMat); hlL.position.set(-0.3, 0.04, 0.96)
+  const hlR = new THREE.Mesh(hlGeo, hlMat); hlR.position.set( 0.3, 0.04, 0.96)
   group.add(hlL, hlR)
 
   // Taillights
   const tlMat = new THREE.MeshStandardMaterial({ color: '#ff2222', emissive: '#ff0000', emissiveIntensity: 0.6 })
   const tlGeo = new THREE.BoxGeometry(0.2, 0.1, 0.05)
-  const tlL = new THREE.Mesh(tlGeo, tlMat)
-  tlL.position.set(-0.3, 0.04, -0.96)
-  const tlR = new THREE.Mesh(tlGeo, tlMat)
-  tlR.position.set(0.3, 0.04, -0.96)
+  const tlL = new THREE.Mesh(tlGeo, tlMat); tlL.position.set(-0.3, 0.04, -0.96)
+  const tlR = new THREE.Mesh(tlGeo, tlMat); tlR.position.set( 0.3, 0.04, -0.96)
   group.add(tlL, tlR)
 
-  // Wheel geometry + material reused for all 4 wheels
+  // Wheels — no spin (user preference), front wheels steer visually
   const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.16, 8)
   const wheelMat = new THREE.MeshStandardMaterial({ color: '#222222', flatShading: true })
-
   function makeWheel() {
     const mesh = new THREE.Mesh(wheelGeo, wheelMat)
     mesh.rotation.z = Math.PI / 2
@@ -83,27 +69,11 @@ function buildCarMesh() {
     return mesh
   }
 
-  // Front-left wheel group (steering rotation on Y)
-  const flGroup = new THREE.Group()
-  flGroup.position.set(-0.57, -0.13, 0.62)
-  flGroup.add(makeWheel())
-  group.add(flGroup)
-
-  // Front-right wheel group
-  const frGroup = new THREE.Group()
-  frGroup.position.set(0.57, -0.13, 0.62)
-  frGroup.add(makeWheel())
-  group.add(frGroup)
-
-  // Rear-left wheel (static, no group needed)
-  const rlWheel = makeWheel()
-  rlWheel.position.set(-0.57, -0.13, -0.62)
-  group.add(rlWheel)
-
-  // Rear-right wheel (static)
-  const rrWheel = makeWheel()
-  rrWheel.position.set(0.57, -0.13, -0.62)
-  group.add(rrWheel)
+  const flGroup = new THREE.Group(); flGroup.position.set(-0.57, -0.13,  0.62); flGroup.add(makeWheel())
+  const frGroup = new THREE.Group(); frGroup.position.set( 0.57, -0.13,  0.62); frGroup.add(makeWheel())
+  const rlWheel = makeWheel();       rlWheel.position.set(-0.57, -0.13, -0.62)
+  const rrWheel = makeWheel();       rrWheel.position.set( 0.57, -0.13, -0.62)
+  group.add(flGroup, frGroup, rlWheel, rrWheel)
 
   return { group, flGroup, frGroup }
 }
@@ -112,105 +82,65 @@ function buildDustSystem(scene) {
   const positions = new Float32Array(MAX_PARTICLES * 3)
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-
   const mat = new THREE.PointsMaterial({
-    color: '#c8a96e',
-    size: 0.18,
-    transparent: true,
-    opacity: 0,
-    sizeAttenuation: true,
-    depthWrite: false,
+    color: '#c8a96e', size: 0.18, transparent: true, opacity: 0,
+    sizeAttenuation: true, depthWrite: false,
   })
-
   const points = new THREE.Points(geo, mat)
   scene.add(points)
-
   return { geo, mat, positions, particles: [] }
 }
 
-export function createCar(scene, rigidBody) {
+export function createCar(scene, colliderWorld) {
   const { group: carGroup, flGroup, frGroup } = buildCarMesh()
-  carGroup.position.set(0, GROUND_Y, 0)
   scene.add(carGroup)
 
-  const dust = buildDustSystem(scene)
+  const dust  = buildDustSystem(scene)
+  const state = createCarState()
 
-  // Car state — shared with camera and updated each frame
-  const carState = {
-    position: new THREE.Vector3(0, GROUND_Y, 0),
-    rotation: 0,
-    speed: 0,
+  // Collision flag — set per-physics-step, consumed by camera/VFX once per frame
+  let collisionThisFrame = false
+
+  function preStep(keys) {
+    stepCar(state, keys)
+    if (colliderWorld) {
+      const hit = resolveCollisions(state, colliderWorld)
+      if (hit) collisionThisFrame = true
+    }
   }
 
-  let velocity   = 0
-  let rotation   = 0
-  let steerAngle = 0
+  function postStep() {
+    // Sync mesh from kinematic state
+    carGroup.position.copy(state.position)
+    _euler.set(0, state.rotation, 0)
+    carGroup.quaternion.setFromEuler(_euler)
 
-  function update(keys) {
-    // ── Acceleration / braking ────────────────────────────────────────────
-    if (keys.forward) {
-      velocity = Math.min(velocity + ACCELERATION, MAX_SPEED)
-    } else if (keys.backward) {
-      velocity = Math.max(velocity - ACCELERATION, -REVERSE_SPEED)
-    } else {
-      velocity *= FRICTION
-      if (Math.abs(velocity) < 0.001) velocity = 0
-    }
+    // Front wheel visual steering
+    flGroup.rotation.y = state.steer
+    frGroup.rotation.y = state.steer
 
-    // ── Steering (only effective when moving) ─────────────────────────────
-    if (Math.abs(velocity) > 0.001) {
-      const steerDir = velocity > 0 ? 1 : -1
-      if (keys.left)  rotation += STEER_SPEED * steerDir
-      if (keys.right) rotation -= STEER_SPEED * steerDir
-    }
-
-    // ── Front wheel visual steering lerp ──────────────────────────────────
-    const targetSteer = keys.left ? MAX_STEER_VIS : keys.right ? -MAX_STEER_VIS : 0
-    steerAngle += (targetSteer - steerAngle) * STEER_VIS_LERP
-    flGroup.rotation.y = steerAngle
-    frGroup.rotation.y = steerAngle
-
-    // ── Position ──────────────────────────────────────────────────────────
-    carState.position.x += Math.sin(rotation) * velocity
-    carState.position.y  = GROUND_Y
-    carState.position.z += Math.cos(rotation) * velocity
-    carState.rotation    = rotation
-    carState.speed       = velocity
-
-    // ── Push kinematic body ───────────────────────────────────────────────
-    rigidBody.setNextKinematicTranslation({
-      x: carState.position.x,
-      y: carState.position.y,
-      z: carState.position.z,
-    })
-    _euler.set(0, rotation, 0)
-    _quat.setFromEuler(_euler)
-    rigidBody.setNextKinematicRotation({ x: _quat.x, y: _quat.y, z: _quat.z, w: _quat.w })
-
-    // ── Sync mesh (must be called after world.step() in main.js) ──────────
-    // We sync directly from carState.position since we control the kinematic body
-    carGroup.position.copy(carState.position)
-    carGroup.rotation.y = rotation
-
-    // ── Dust particles ─────────────────────────────────────────────────────
-    _updateDust(dust, carState)
+    _updateDust(dust, state)
   }
 
-  return { carGroup, carState, update }
+  /** Returns true if a collision happened since the last call, then resets the flag. */
+  function consumeCollision() {
+    const v = collisionThisFrame
+    collisionThisFrame = false
+    return v
+  }
+
+  return { carState: state, preStep, postStep, consumeCollision }
 }
 
-function _updateDust(dust, carState) {
-  const { position, rotation, speed } = carState
+function _updateDust(dust, state) {
+  const { position, rotation, speed } = state
   const { geo, mat, positions, particles } = dust
 
-  // Emit new particles when moving
   if (Math.abs(speed) > EMIT_SPEED_THRESHOLD && particles.length < MAX_PARTICLES) {
-    const rearOffset = 1.05
-    const rearX = position.x - Math.sin(rotation) * rearOffset
-    const rearZ = position.z - Math.cos(rotation) * rearOffset
-    const emitCount = Math.abs(speed) > 0.1 ? 2 : 1
-
-    for (let i = 0; i < emitCount; i++) {
+    const rearX = position.x - Math.sin(rotation) * 1.05
+    const rearZ = position.z - Math.cos(rotation) * 1.05
+    const count = speed > 0.1 ? 2 : 1
+    for (let i = 0; i < count; i++) {
       particles.push({
         position: new THREE.Vector3(
           rearX + (Math.random() - 0.5) * 0.3,
@@ -228,7 +158,6 @@ function _updateDust(dust, carState) {
     }
   }
 
-  // Age and remove dead particles
   for (let i = particles.length - 1; i >= 0; i--) {
     particles[i].life--
     particles[i].position.add(particles[i].velocity)
@@ -236,25 +165,17 @@ function _updateDust(dust, carState) {
     if (particles[i].life <= 0) particles.splice(i, 1)
   }
 
-  // Update buffer
-  const count = particles.length
-  for (let i = 0; i < count; i++) {
+  const n = particles.length
+  for (let i = 0; i < n; i++) {
     positions[i * 3]     = particles[i].position.x
     positions[i * 3 + 1] = particles[i].position.y
     positions[i * 3 + 2] = particles[i].position.z
   }
-  // Hide unused slots below ground
-  for (let i = count; i < MAX_PARTICLES; i++) {
-    positions[i * 3 + 1] = -999
-  }
+  for (let i = n; i < MAX_PARTICLES; i++) positions[i * 3 + 1] = -999
   geo.attributes.position.needsUpdate = true
-  geo.setDrawRange(0, count)
+  geo.setDrawRange(0, n)
 
-  // Fade opacity with average particle age
-  if (count > 0) {
-    const avgLife = particles.reduce((s, p) => s + p.life / p.maxLife, 0) / count
-    mat.opacity = avgLife * 0.75
-  } else {
-    mat.opacity = 0
-  }
+  mat.opacity = n > 0
+    ? particles.reduce((s, p) => s + p.life / p.maxLife, 0) / n * 0.75
+    : 0
 }
