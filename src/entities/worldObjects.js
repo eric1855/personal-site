@@ -1,16 +1,14 @@
 import * as THREE from 'three'
-import RAPIER from '@dimforge/rapier3d-compat'
 
-export function createWorldObjects(scene, world) {
-  _createGround(scene, world)
+export function createWorldObjects(scene) {
+  _createGround(scene)
   _createTrees(scene)
   // Stubs for future world content:
   // _createBuildings(scene, world)
   // _createInteractables(scene, world)
 }
 
-function _createGround(scene, world) {
-  // Visual plane — matches Ground.tsx
+function _createGround(scene) {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: '#4a7c59', side: THREE.DoubleSide, flatShading: true })
@@ -18,11 +16,6 @@ function _createGround(scene, world) {
   mesh.rotation.x = -Math.PI / 2
   mesh.receiveShadow = true
   scene.add(mesh)
-
-  // Static physics collider — matches RigidBody type="fixed" + CuboidCollider args={[150, 0.1, 150]}
-  const rbDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0)
-  const groundBody = world.createRigidBody(rbDesc)
-  world.createCollider(RAPIER.ColliderDesc.cuboid(150, 0.1, 150), groundBody)
 }
 
 function _createTrees(scene) {

@@ -30,6 +30,46 @@ export function createUI() {
       ">or Arrow Keys to drive</p>
     </div>
   `
+
+  // Proximity prompt — shown when car is near a location
+  const prompt = document.createElement('div')
+  prompt.id = 'proximity-prompt'
+  Object.assign(prompt.style, {
+    position:            'fixed',
+    bottom:              '120px',
+    left:                '50%',
+    transform:           'translateX(-50%) translateY(8px)',
+    background:          'rgba(10,10,20,0.75)',
+    backdropFilter:      'blur(8px)',
+    webkitBackdropFilter:'blur(8px)',
+    border:              '1px solid rgba(255,255,255,0.25)',
+    borderRadius:        '10px',
+    padding:             '10px 20px',
+    color:               '#ffffff',
+    fontFamily:          'monospace',
+    fontSize:            '14px',
+    letterSpacing:       '0.06em',
+    boxShadow:           '0 4px 16px rgba(0,0,0,0.4)',
+    pointerEvents:       'none',
+    userSelect:          'none',
+    opacity:             '0',
+    transition:          'opacity 0.14s ease, transform 0.14s ease',
+    whiteSpace:          'nowrap',
+  })
+  hud.appendChild(prompt)
+
+  function updateProximityPrompt(nearLocation) {
+    if (nearLocation) {
+      prompt.textContent = `[ E ]  Enter ${nearLocation.label}`
+      prompt.style.opacity = '1'
+      prompt.style.transform = 'translateX(-50%) translateY(0)'
+    } else {
+      prompt.style.opacity = '0'
+      prompt.style.transform = 'translateX(-50%) translateY(8px)'
+    }
+  }
+
+  return { updateProximityPrompt }
 }
 
 function _keyHTML(label) {

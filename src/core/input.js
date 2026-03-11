@@ -1,9 +1,10 @@
 export function createInput() {
   const keys = {
-    forward:  false,
-    backward: false,
-    left:     false,
-    right:    false,
+    forward:   false,
+    backward:  false,
+    left:      false,
+    right:     false,
+    interact:  false,  // E key — open nearby location
   }
 
   function onKeyDown(e) {
@@ -15,7 +16,8 @@ export function createInput() {
       case 'KeyW': case 'ArrowUp':    keys.forward  = true; break
       case 'KeyS': case 'ArrowDown':  keys.backward = true; break
       case 'KeyA': case 'ArrowLeft':  keys.left     = true; break
-      case 'KeyD': case 'ArrowRight': keys.right    = true; break
+      case 'KeyD': case 'ArrowRight': keys.right    = true;  break
+      case 'KeyE':                    keys.interact = true;  break
     }
   }
 
@@ -25,6 +27,7 @@ export function createInput() {
       case 'KeyS': case 'ArrowDown':  keys.backward = false; break
       case 'KeyA': case 'ArrowLeft':  keys.left     = false; break
       case 'KeyD': case 'ArrowRight': keys.right    = false; break
+      case 'KeyE':                    keys.interact = false; break
     }
   }
 
