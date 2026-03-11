@@ -1,59 +1,91 @@
-import { createRenderer }      from './src/core/renderer.js'
-import { createScene }         from './src/core/scene.js'
-import { createCamera }        from './src/core/camera.js'
-import { createInput }         from './src/core/input.js'
-import { createPhysicsEngine } from './src/physics/engine.js'
-import { createCarPhysics }    from './src/physics/carPhysics.js'
-import { createCar }           from './src/entities/car.js'
-import { createWorldObjects }  from './src/entities/worldObjects.js'
-import { createUI }            from './src/ui/ui.js'
+import { createRenderer }   from './src/core/renderer.js'
+import { createScene }      from './src/core/scene.js'
+import { createCamera }     from './src/core/camera.js'
+import { createInput }      from './src/core/input.js'
+import { createCar }        from './src/entities/car.js'
+import { createWorldObjects } from './src/entities/worldObjects.js'
+import { createLocations }  from './src/entities/locations.js'
+import { createColliderWorld } from './src/physics/colliders.js'
+import { createUI }         from './src/ui/ui.js'
+import { createPopup }      from './src/ui/popup.js'
 
-async function init() {
-  // 1. Physics MUST init first — Rapier WASM is async
-  const { world, step } = await createPhysicsEngine()
+// Rendering
+const { renderer } = createRenderer()
+const { scene }    = createScene()
+const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
 
-  // 2. Rendering infrastructure
-  const { renderer } = createRenderer()
-  const { scene }    = createScene()
-  const { camera, update: updateCamera } = createCamera(
-    window.innerWidth / window.innerHeight
-  )
+// Input
+const { keys } = createInput()
 
-  // 3. Input
-  const { keys } = createInput()
+// World
+createWorldObjects(scene)
+const { locations } = createLocations(scene)
 
-  // 4. World objects — ground collider + trees
-  createWorldObjects(scene, world)
+// Collision world — AABB for buildings, circles for trees, world boundary
+const colliderWorld = createColliderWorld()
 
-  // 5. Car — physics body first, then mesh + state
-  const { rigidBody }                   = createCarPhysics(world)
-  const { carState, update: updateCar } = createCar(scene, rigidBody)
+// Car (pure kinematic — no physics engine, but with collision response)
+const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, colliderWorld)
 
-  // 6. HUD overlay
-  createUI()
+// HUD + popup
+const { updateProximityPrompt } = createUI()
+const popup = createPopup(() => { isPaused = false })
 
-  // 7. Resize handler
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight)
-    camera.aspect = window.innerWidth / window.innerHeight
-    camera.updateProjectionMatrix()
-  })
+let isPaused     = false
+let prevInteract = false
 
-  // 8. Game loop
-  // Frame order is critical:
-  //   updateCar  → computes new position, pushes kinematic targets to physics body
-  //   step()     → world.step() processes kinematic targets + resolves collisions
-  //   updateCamera → reads carState written by updateCar
-  //   render
-  function loop() {
-    requestAnimationFrame(loop)
-    updateCar(keys)
-    step()
-    updateCamera(carState)
-    renderer.render(scene, camera)
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && isPaused) { isPaused = false; popup.close() }
+})
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight)
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+})
+
+// Fixed-timestep game loop — physics always runs at 60 Hz regardless of display framerate
+const FIXED_DT  = 1 / 60
+let prevTime    = performance.now()
+let accumulator = 0
+
+function loop(now) {
+  requestAnimationFrame(loop)
+
+  const elapsed = Math.min((now - prevTime) / 1000, 0.05) // cap at 50 ms (tab-blur recovery)
+  prevTime      = now
+  accumulator  += elapsed
+
+  while (accumulator >= FIXED_DT) {
+    if (!isPaused) carPreStep(keys)
+    accumulator -= FIXED_DT
   }
 
-  loop()
+  carPostStep()
+
+  const near = isPaused ? null : _findNearest(carState.position, locations)
+  updateProximityPrompt(near)
+
+  const triggered = keys.interact && !prevInteract
+  prevInteract = keys.interact
+  if (triggered && near && !isPaused) {
+    isPaused = true
+    popup.open(near)
+  }
+
+  updateCamera(carState)
+  renderer.render(scene, camera)
 }
 
-init()
+loop(performance.now())
+
+function _findNearest(pos, locations) {
+  let best = null, bestD = Infinity
+  for (const loc of locations) {
+    const dx = pos.x - loc.position.x
+    const dz = pos.z - loc.position.z
+    const d  = Math.sqrt(dx * dx + dz * dz)
+    if (d < loc.radius && d < bestD) { best = loc; bestD = d }
+  }
+  return best
+}
