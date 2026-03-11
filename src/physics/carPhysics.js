@@ -14,6 +14,7 @@ export function createCarState() {
   return {
     position: new THREE.Vector3(0, GROUND_Y, 0),
     rotation: 0, velocity: 0, steer: 0, speed: 0,
+    collided: false,
   }
 }
 
