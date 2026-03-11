@@ -8,7 +8,7 @@ Drive near a building and press E to open it as a popup.
 ## Stack
 - **Vite** + vanilla JS (ESM modules), no React, no TypeScript
 - **Three.js** for 3D rendering
-- No physics engine — car uses pure kinematic math with OBB collision via SAT
+- **cannon-es** physics engine with custom spring-damper suspension
 
 ## File Structure
 ```
@@ -19,44 +19,49 @@ src/core/
   camera.js               follow camera (fixed world-space offset) + shake effect
   input.js                keyboard state (WASD + E)
 src/entities/
-  car.js                  car mesh + kinematic step + dust particles + collision dust burst
-  worldObjects.js         ground mesh + trees
-  locations.js            portfolio buildings (mesh only, no physics)
+  car.js                  car mesh + syncs Three.js visuals from cannon-es state + dust particles
+  worldObjects.js         ground mesh + trees (Three.js visuals only)
+  locations.js            portfolio buildings (Three.js mesh + interaction data)
 src/physics/
-  carPhysics.js           kinematic car state + stepCar()
-  colliders.js            collider registry — AABB (buildings) + circle (trees)
-  collision.js            OBB-vs-AABB and OBB-vs-Circle SAT detection + resolution
+  cannonWorld.js          CANNON.World setup (gravity, broadphase, solver, materials)
+  groundBody.js           static ground plane body
+  staticBodies.js         static bodies for buildings, trees, world boundary walls
+  springCar.js            custom spring-damper suspension car (chassis + 4 wheel bodies)
 src/ui/
-  ui.js                   proximity HUD prompt
-  popup.js                location content popup
+  ui.js                   proximity HUD prompt + WASD key display
+  popup.js                location content popup (glassmorphism panel)
 ```
+
+## Physics Architecture — Custom Spring Suspension
+- **Engine**: cannon-es (pure JS, no WASM)
+- **Chassis**: CANNON.Body with Box shape (1.0 x 0.38 x 1.9), mass 80 kg
+- **4 Wheels**: separate CANNON.Body spheres (radius 0.22, mass 5 kg each)
+- **Suspension**: manual spring-damper forces computed each frame
+  - Spring stiffness: 600 N/m, damping: 45 N*s/m, rest length: 0.40m
+  - Lateral constraint springs keep wheels under chassis (stiffness 800, damping 60)
+  - Anti-roll bars equalize vertical displacement between wheel pairs (120 N)
+- **Drive**: rear-wheel drive — force applied to rear wheel bodies (280 N forward, 450 N braking)
+- **Steering**: yaw torque on chassis + front wheel attachment points rotated by steer angle
+- **Stability**: angular damping 0.85, anti-flip corrective torque if chassis tilts past 0.85 upDot
+- **Static colliders**: buildings (Box), trees (Cylinder), ground (Plane), boundary walls (Box)
+- No built-in RaycastVehicle — all suspension from scratch
 
 ## Car Design
 - WASD / arrow keys: W/S = forward/backward, A/D = steer
-- Pure kinematic: position/heading updated with math each step — no physics engine, no bouncing
-- Fixed Y height (GROUND_Y = 0.3), never falls or bounces
-- Front wheels visually steer (Y rotation). No wheel spin (user preference).
+- cannon-es physics: position/orientation driven by rigid body simulation
+- Wheels visually positioned from physics wheel body positions
+- Front wheels visually steer (Y rotation offset by steer angle)
 - Dust particles emit from rear when moving
-
-## Collision System
-- **OBB (Oriented Bounding Box)** for the car: half-extents (0.5, 0.95) — matches the 1.0 x 1.9 body
-- **SAT (Separating Axis Theorem)** for detection against:
-  - **AABB colliders** for buildings (4 axes: car-localX, car-localZ, world-X, world-Z)
-  - **Circle colliders** for trees (closest-point-on-OBB method, radius 0.8)
-- **Resolution**: push car out along minimum-penetration axis, zero normal velocity component (slide along walls, no bounce)
-- **World boundary**: car is clamped to |x| < 140, |z| < 140
-- **VFX**: camera shake (intensity scales with impact speed) + dust burst on impact
-- Collision runs after `stepCar()` in `preStep()`, before mesh sync
 
 ## Game Loop
 Fixed-timestep accumulator at 60 Hz decoupled from display framerate:
 ```
 accumulate real delta time
 while (accumulator >= 1/60):
-  preStep(keys)   ← advance kinematic car state + resolve collisions
+  carPreStep(keys, dt)   ← apply spring + drive forces
+  world.step(dt)         ← cannon-es physics step
   accumulator -= 1/60
-postStep()         ← sync mesh from state (once per render frame)
-consume collision  ← trigger camera shake if impact occurred
+carPostStep()            ← sync Three.js mesh from cannon-es bodies (once per render frame)
 camera update → render
 ```
 
@@ -65,7 +70,7 @@ camera update → render
 
 ## Conventions
 - One named export per file (`createX` factory pattern)
-- Module-level THREE reusables (`_euler`, `_quat`) — avoid per-frame allocation
-- `carState` object is the single source of truth for car position/rotation/speed
+- Module-level THREE reusables (`_quat`) — avoid per-frame allocation
+- `carState` object is derived from cannon-es chassis body each frame — used by camera and proximity
 - Proximity detection is pure distance math — no physics colliders needed for buildings
-- Collision uses pure math (SAT) — no physics engine
+- Static physics bodies match the visual mesh dimensions from Three.js

@@ -1,15 +1,12 @@
 import * as THREE from 'three'
-import { createCarState, stepCar } from '../physics/carPhysics.js'
-import { resolveCollisions } from '../physics/collision.js'
 
 // Dust constants
 const MAX_PARTICLES        = 120
 const PARTICLE_LIFETIME    = 35
-const EMIT_SPEED_THRESHOLD = 0.01
-const BURST_PARTICLE_COUNT = 18
+const EMIT_SPEED_THRESHOLD = 0.5
 
-// Module-level reusable
-const _euler = new THREE.Euler()
+// Module-level reusables
+const _quat = new THREE.Quaternion()
 
 function buildCarMesh() {
   const group = new THREE.Group()
@@ -60,23 +57,23 @@ function buildCarMesh() {
   const tlR = new THREE.Mesh(tlGeo, tlMat); tlR.position.set( 0.3, 0.04, -0.96)
   group.add(tlL, tlR)
 
-  // Wheels — no spin (user preference), front wheels steer visually
+  // Wheel groups — we'll position these from physics, so they are separate
+  // We still add them to the scene root (not the car group) so they track physics independently
   const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.16, 8)
   const wheelMat = new THREE.MeshStandardMaterial({ color: '#222222', flatShading: true })
-  function makeWheel() {
+
+  function makeWheelMesh() {
+    const pivot = new THREE.Group()
     const mesh = new THREE.Mesh(wheelGeo, wheelMat)
     mesh.rotation.z = Math.PI / 2
     mesh.castShadow = true
-    return mesh
+    pivot.add(mesh)
+    return pivot
   }
 
-  const flGroup = new THREE.Group(); flGroup.position.set(-0.57, -0.13,  0.62); flGroup.add(makeWheel())
-  const frGroup = new THREE.Group(); frGroup.position.set( 0.57, -0.13,  0.62); frGroup.add(makeWheel())
-  const rlWheel = makeWheel();       rlWheel.position.set(-0.57, -0.13, -0.62)
-  const rrWheel = makeWheel();       rrWheel.position.set( 0.57, -0.13, -0.62)
-  group.add(flGroup, frGroup, rlWheel, rrWheel)
+  const wheelMeshes = [makeWheelMesh(), makeWheelMesh(), makeWheelMesh(), makeWheelMesh()]
 
-  return { group, flGroup, frGroup }
+  return { group, wheelMeshes }
 }
 
 function buildDustSystem(scene) {
@@ -92,84 +89,68 @@ function buildDustSystem(scene) {
   return { geo, mat, positions, particles: [] }
 }
 
-export function createCar(scene, colliders) {
-  const { group: carGroup, flGroup, frGroup } = buildCarMesh()
+/**
+ * createCar — builds the visual car mesh and wires it to cannon-es spring car physics.
+ *
+ * @param {THREE.Scene} scene
+ * @param {object} springCar — the object returned by createSpringCar()
+ */
+export function createCar(scene, springCar) {
+  const { group: carGroup, wheelMeshes } = buildCarMesh()
   scene.add(carGroup)
+  // Add wheel meshes to scene (they are positioned independently by physics)
+  for (const wm of wheelMeshes) {
+    scene.add(wm)
+  }
 
-  const dust  = buildDustSystem(scene)
-  const state = createCarState()
+  const dust = buildDustSystem(scene)
 
-  // Track collision state for VFX
-  let collisionThisFrame = false
-  let impactSpeed = 0
+  // The state object that the rest of the system reads (camera, proximity, etc.)
+  // Updated each postStep from physics
+  const carState = {
+    position: new THREE.Vector3(0, 0.5, 0),
+    rotation: 0,
+    velocity: 0,
+    speed: 0,
+    steer: 0,
+  }
 
-  function preStep(keys) {
-    const prevSpeed = Math.abs(state.velocity)
-    stepCar(state, keys)
-
-    // Collision detection + resolution
-    if (colliders && colliders.length > 0) {
-      const hit = resolveCollisions(state, colliders)
-      if (hit && prevSpeed > 0.04) {
-        collisionThisFrame = true
-        impactSpeed = Math.max(impactSpeed, prevSpeed)
-      }
-    }
+  function preStep(keys, dt) {
+    springCar.preStep(keys, dt)
   }
 
   function postStep() {
-    // Sync mesh from kinematic state
-    carGroup.position.copy(state.position)
-    _euler.set(0, state.rotation, 0)
-    carGroup.quaternion.setFromEuler(_euler)
+    const physState = springCar.getState()
 
-    // Front wheel visual steering
-    flGroup.rotation.y = state.steer
-    frGroup.rotation.y = state.steer
+    // Sync carState for external consumers (camera, proximity, etc.)
+    carState.position.set(physState.position.x, physState.position.y, physState.position.z)
+    carState.rotation = physState.rotation
+    carState.velocity = physState.velocity
+    carState.speed = physState.speed
+    carState.steer = physState.steer
 
-    // Impact dust burst
-    if (collisionThisFrame) {
-      _emitBurst(dust, state)
+    // Sync chassis mesh
+    carGroup.position.set(physState.position.x, physState.position.y, physState.position.z)
+    _quat.set(physState.quaternion.x, physState.quaternion.y, physState.quaternion.z, physState.quaternion.w)
+    carGroup.quaternion.copy(_quat)
+
+    // Sync wheel meshes from physics wheel positions
+    for (let i = 0; i < physState.wheels.length; i++) {
+      const pw = physState.wheels[i]
+      const wm = wheelMeshes[i]
+      wm.position.set(pw.x, pw.y, pw.z)
+      // Steering visual for front wheels
+      if (pw.steered) {
+        wm.rotation.y = carState.rotation + physState.steer
+      } else {
+        wm.rotation.y = carState.rotation
+      }
     }
 
-    _updateDust(dust, state)
+    _updateDust(dust, carState)
   }
 
-  /** Returns impact speed if collision occurred this frame, else 0. Resets flag. */
-  function consumeCollision() {
-    if (collisionThisFrame) {
-      collisionThisFrame = false
-      const spd = impactSpeed
-      impactSpeed = 0
-      return spd
-    }
-    return 0
-  }
-
-  return { carState: state, preStep, postStep, consumeCollision }
-}
-
-function _emitBurst(dust, state) {
-  const { position, rotation } = state
-  const { particles } = dust
-  for (let i = 0; i < BURST_PARTICLE_COUNT && particles.length < MAX_PARTICLES; i++) {
-    const angle = Math.random() * Math.PI * 2
-    const spd = 0.03 + Math.random() * 0.06
-    particles.push({
-      position: new THREE.Vector3(
-        position.x + (Math.random() - 0.5) * 1.2,
-        0.15 + Math.random() * 0.25,
-        position.z + (Math.random() - 0.5) * 1.2
-      ),
-      velocity: new THREE.Vector3(
-        Math.cos(angle) * spd,
-        0.02 + Math.random() * 0.04,
-        Math.sin(angle) * spd
-      ),
-      life: PARTICLE_LIFETIME,
-      maxLife: PARTICLE_LIFETIME,
-    })
-  }
+  return { carState, preStep, postStep }
 }
 
 function _updateDust(dust, state) {
@@ -179,7 +160,7 @@ function _updateDust(dust, state) {
   if (Math.abs(speed) > EMIT_SPEED_THRESHOLD && particles.length < MAX_PARTICLES) {
     const rearX = position.x - Math.sin(rotation) * 1.05
     const rearZ = position.z - Math.cos(rotation) * 1.05
-    const count = speed > 0.1 ? 2 : 1
+    const count = speed > 2 ? 2 : 1
     for (let i = 0; i < count; i++) {
       particles.push({
         position: new THREE.Vector3(

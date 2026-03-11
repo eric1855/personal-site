@@ -1,33 +1,41 @@
-import { createRenderer }   from './src/core/renderer.js'
-import { createScene }      from './src/core/scene.js'
-import { createCamera }     from './src/core/camera.js'
-import { createInput }      from './src/core/input.js'
-import { createCar }        from './src/entities/car.js'
-import { createWorldObjects } from './src/entities/worldObjects.js'
-import { createLocations }  from './src/entities/locations.js'
-import { createColliderWorld } from './src/physics/colliders.js'
-import { createUI }         from './src/ui/ui.js'
-import { createPopup }      from './src/ui/popup.js'
+import { createRenderer }      from './src/core/renderer.js'
+import { createScene }         from './src/core/scene.js'
+import { createCamera }        from './src/core/camera.js'
+import { createInput }         from './src/core/input.js'
+import { createCannonWorld }   from './src/physics/cannonWorld.js'
+import { createGroundBody }    from './src/physics/groundBody.js'
+import { createStaticBodies }  from './src/physics/staticBodies.js'
+import { createSpringCar }     from './src/physics/springCar.js'
+import { createCar }           from './src/entities/car.js'
+import { createWorldObjects }  from './src/entities/worldObjects.js'
+import { createLocations }     from './src/entities/locations.js'
+import { createUI }            from './src/ui/ui.js'
+import { createPopup }         from './src/ui/popup.js'
 
-// Rendering
+// ── Rendering ───────────────────────────────────────────────────
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
 
-// Input
+// ── Input ───────────────────────────────────────────────────────
 const { keys } = createInput()
 
-// World
+// ── cannon-es Physics World ─────────────────────────────────────
+const { world, defaultMaterial } = createCannonWorld()
+createGroundBody(world, defaultMaterial)
+createStaticBodies(world, defaultMaterial)
+
+// ── Spring-suspension car (cannon-es) ───────────────────────────
+const springCar = createSpringCar(world, defaultMaterial)
+
+// ── Three.js world objects ──────────────────────────────────────
 createWorldObjects(scene)
 const { locations } = createLocations(scene)
 
-// Collision world
-const { colliders } = createColliderWorld()
+// ── Car visuals (synced to cannon-es physics) ───────────────────
+const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, springCar)
 
-// Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
-
-// HUD + popup
+// ── HUD + popup ─────────────────────────────────────────────────
 const { updateProximityPrompt } = createUI()
 const popup = createPopup(() => { isPaused = false })
 
@@ -44,7 +52,8 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix()
 })
 
-// Fixed-timestep game loop — physics always runs at 60 Hz regardless of display framerate
+// ── Fixed-timestep game loop ────────────────────────────────────
+// Physics always runs at 60 Hz regardless of display framerate
 const FIXED_DT  = 1 / 60
 let prevTime    = performance.now()
 let accumulator = 0
@@ -57,19 +66,14 @@ function loop(now) {
   accumulator  += elapsed
 
   while (accumulator >= FIXED_DT) {
-    if (!isPaused) carPreStep(keys)
+    if (!isPaused) {
+      carPreStep(keys, FIXED_DT)
+      world.step(FIXED_DT)
+    }
     accumulator -= FIXED_DT
   }
 
   carPostStep()
-
-  // Camera shake on collision (scale intensity by impact speed)
-  const impactSpeed = consumeCollision()
-  if (impactSpeed > 0) {
-    const MAX_SPEED = 0.18  // from carPhysics.js
-    const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
-    shakeCamera(intensity)
-  }
 
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
