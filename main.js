@@ -1,91 +1,102 @@
-import { createRenderer }   from './src/core/renderer.js'
-import { createScene }      from './src/core/scene.js'
-import { createCamera }     from './src/core/camera.js'
-import { createInput }      from './src/core/input.js'
-import { createCar }        from './src/entities/car.js'
+import { initAmmoWorld }      from './src/physics/ammoWorld.js'
+import { createVehiclePhysics } from './src/physics/carPhysics.js'
+import { createRenderer }    from './src/core/renderer.js'
+import { createScene }       from './src/core/scene.js'
+import { createCamera }      from './src/core/camera.js'
+import { createInput }       from './src/core/input.js'
+import { createCar }         from './src/entities/car.js'
 import { createWorldObjects } from './src/entities/worldObjects.js'
-import { createLocations }  from './src/entities/locations.js'
-import { createColliderWorld } from './src/physics/colliders.js'
-import { createUI }         from './src/ui/ui.js'
-import { createPopup }      from './src/ui/popup.js'
+import { createLocations }   from './src/entities/locations.js'
+import { createUI }          from './src/ui/ui.js'
+import { createPopup }       from './src/ui/popup.js'
 
-// Rendering
-const { renderer } = createRenderer()
-const { scene }    = createScene()
-const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
+// ── Async init ────────────────────────────────────────────────────────────────
+async function main() {
+  // 1) Initialize Ammo.js and create physics world
+  const { world } = await initAmmoWorld()
 
-// Input
-const { keys } = createInput()
+  // 2) Rendering
+  const { renderer } = createRenderer()
+  const { scene }    = createScene()
+  const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
 
-// World
-createWorldObjects(scene)
-const { locations } = createLocations(scene)
+  // 3) Input
+  const { keys } = createInput()
 
-// Collision world
-const { colliders } = createColliderWorld()
+  // 4) World objects (ground + trees) — with physics colliders
+  createWorldObjects(scene, world)
 
-// Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
+  // 5) Buildings — with physics colliders
+  const { locations } = createLocations(scene, world)
 
-// HUD + popup
-const { updateProximityPrompt } = createUI()
-const popup = createPopup(() => { isPaused = false })
+  // 6) Car mesh (visual only)
+  const { syncMesh } = createCar(scene)
 
-let isPaused     = false
-let prevInteract = false
+  // 7) Vehicle physics (Ammo btRaycastVehicle)
+  const { carState, preStep: vehiclePreStep, postStep: vehiclePostStep } =
+    createVehiclePhysics(world)
 
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && isPaused) { isPaused = false; popup.close() }
-})
+  // 8) HUD + popup
+  const { updateProximityPrompt } = createUI()
+  const popup = createPopup(() => { isPaused = false })
 
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight)
-  camera.aspect = window.innerWidth / window.innerHeight
-  camera.updateProjectionMatrix()
-})
+  let isPaused     = false
+  let prevInteract = false
 
-// Fixed-timestep game loop — physics always runs at 60 Hz regardless of display framerate
-const FIXED_DT  = 1 / 60
-let prevTime    = performance.now()
-let accumulator = 0
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && isPaused) { isPaused = false; popup.close() }
+  })
 
-function loop(now) {
-  requestAnimationFrame(loop)
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+  })
 
-  const elapsed = Math.min((now - prevTime) / 1000, 0.05) // cap at 50 ms (tab-blur recovery)
-  prevTime      = now
-  accumulator  += elapsed
+  // ── Game loop ─────────────────────────────────────────────────────────────
+  // Ammo.js stepSimulation handles sub-stepping internally,
+  // so we pass the real delta and let Bullet subdivide as needed.
+  const FIXED_DT    = 1 / 60
+  const MAX_SUBSTEPS = 3
+  let prevTime = performance.now()
 
-  while (accumulator >= FIXED_DT) {
-    if (!isPaused) carPreStep(keys)
-    accumulator -= FIXED_DT
+  function loop(now) {
+    requestAnimationFrame(loop)
+
+    const dt = Math.min((now - prevTime) / 1000, 0.05) // cap for tab-blur
+    prevTime = now
+
+    // Apply input forces
+    if (!isPaused) vehiclePreStep(keys)
+
+    // Step the physics world
+    world.stepSimulation(dt, MAX_SUBSTEPS, FIXED_DT)
+
+    // Sync car state from Bullet
+    vehiclePostStep()
+
+    // Sync Three.js mesh from car state
+    syncMesh(carState)
+
+    // Proximity detection
+    const near = isPaused ? null : _findNearest(carState.position, locations)
+    updateProximityPrompt(near)
+
+    const triggered = keys.interact && !prevInteract
+    prevInteract = keys.interact
+    if (triggered && near && !isPaused) {
+      isPaused = true
+      popup.open(near)
+    }
+
+    updateCamera(carState)
+    renderer.render(scene, camera)
   }
 
-  carPostStep()
-
-  // Camera shake on collision (scale intensity by impact speed)
-  const impactSpeed = consumeCollision()
-  if (impactSpeed > 0) {
-    const MAX_SPEED = 0.18  // from carPhysics.js
-    const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
-    shakeCamera(intensity)
-  }
-
-  const near = isPaused ? null : _findNearest(carState.position, locations)
-  updateProximityPrompt(near)
-
-  const triggered = keys.interact && !prevInteract
-  prevInteract = keys.interact
-  if (triggered && near && !isPaused) {
-    isPaused = true
-    popup.open(near)
-  }
-
-  updateCamera(carState)
-  renderer.render(scene, camera)
+  loop(performance.now())
 }
 
-loop(performance.now())
+main()
 
 function _findNearest(pos, locations) {
   let best = null, bestD = Infinity

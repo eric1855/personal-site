@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { getAmmo, createStaticBody } from '../physics/ammoWorld.js'
 
 const LOCATION_DEFS = [
   {
@@ -83,11 +84,28 @@ function _buildLocationMesh(def) {
   return group
 }
 
-export function createLocations(scene) {
+export function createLocations(scene, world) {
+  const A = getAmmo()
   const locations = []
 
   for (const def of LOCATION_DEFS) {
     scene.add(_buildLocationMesh(def))
+
+    // Physics collider — static box matching the building body
+    const halfExtents = new A.btVector3(
+      def.bodySize.w / 2,
+      def.bodySize.h / 2,
+      def.bodySize.d / 2,
+    )
+    const buildingShape = new A.btBoxShape(halfExtents)
+    A.destroy(halfExtents)
+
+    createStaticBody(world, buildingShape, {
+      x: def.position.x,
+      y: def.bodyY,       // center of the building body
+      z: def.position.z,
+    })
+
     locations.push({
       id:       def.id,
       label:    def.label,

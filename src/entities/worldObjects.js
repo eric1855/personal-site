@@ -1,14 +1,15 @@
 import * as THREE from 'three'
+import { getAmmo, createStaticBody } from '../physics/ammoWorld.js'
 
-export function createWorldObjects(scene) {
-  _createGround(scene)
-  _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
+export function createWorldObjects(scene, world) {
+  _createGround(scene, world)
+  _createTrees(scene, world)
 }
 
-function _createGround(scene) {
+function _createGround(scene, world) {
+  const A = getAmmo()
+
+  // Visual ground
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: '#4a7c59', side: THREE.DoubleSide, flatShading: true })
@@ -16,9 +17,15 @@ function _createGround(scene) {
   mesh.rotation.x = -Math.PI / 2
   mesh.receiveShadow = true
   scene.add(mesh)
+
+  // Physics ground — static plane at Y=0 pointing up
+  const groundShape = new A.btStaticPlaneShape(new A.btVector3(0, 1, 0), 0)
+  createStaticBody(world, groundShape, { x: 0, y: 0, z: 0 })
 }
 
-function _createTrees(scene) {
+function _createTrees(scene, world) {
+  const A = getAmmo()
+
   // All 28 positions from Scene.tsx — exact values
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
@@ -29,6 +36,10 @@ function _createTrees(scene) {
     [-12, 0, 45],  [38, 0, -40], [-50, 0, 8],  [16, 0, 50],
     [-22, 0, -52], [44, 0, 28], [-38, 0, -30], [10, 0, -48],
   ]
+
+  // Shared cylinder collision shape for tree trunks
+  // Approximate each tree trunk as a cylinder: radius ~0.2*scale, height ~1.6*scale
+  // We use a simple box collider for each tree (simpler and faster)
 
   treePositions.forEach(([x, y, z], i) => {
     // Same scale formula and color selection as Scene.tsx
@@ -59,5 +70,20 @@ function _createTrees(scene) {
     })
 
     scene.add(group)
+
+    // Physics collider — cylinder approximation for the trunk
+    // Use a box for simplicity: roughly 0.4 x 3.0 x 0.4 (scaled)
+    const colliderW = 0.4 * scale
+    const colliderH = 3.0 * scale
+    const colliderD = 0.4 * scale
+    const halfExtents = new A.btVector3(colliderW / 2, colliderH / 2, colliderD / 2)
+    const treeShape = new A.btBoxShape(halfExtents)
+    A.destroy(halfExtents)
+
+    createStaticBody(world, treeShape, {
+      x: x,
+      y: colliderH / 2, // center at half-height
+      z: z,
+    })
   })
 }

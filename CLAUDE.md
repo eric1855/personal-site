@@ -8,56 +8,62 @@ Drive near a building and press E to open it as a popup.
 ## Stack
 - **Vite** + vanilla JS (ESM modules), no React, no TypeScript
 - **Three.js** for 3D rendering
-- No physics engine — car uses pure kinematic math with OBB collision via SAT
+- **Ammo.js** (Bullet physics engine compiled to JS via Emscripten) for physics
 
 ## File Structure
 ```
-main.js                   game loop, wires everything together
+main.js                   async game loop, wires everything together
 src/core/
   renderer.js             WebGL renderer setup
   scene.js                lights, fog, background
-  camera.js               follow camera (fixed world-space offset) + shake effect
+  camera.js               follow camera (fixed world-space offset)
   input.js                keyboard state (WASD + E)
 src/entities/
-  car.js                  car mesh + kinematic step + dust particles + collision dust burst
-  worldObjects.js         ground mesh + trees
-  locations.js            portfolio buildings (mesh only, no physics)
+  car.js                  car mesh + dust particles (visual only)
+  worldObjects.js         ground mesh + trees + static physics colliders
+  locations.js            portfolio buildings + static physics colliders
 src/physics/
-  carPhysics.js           kinematic car state + stepCar()
-  colliders.js            collider registry — AABB (buildings) + circle (trees)
-  collision.js            OBB-vs-AABB and OBB-vs-Circle SAT detection + resolution
+  ammoWorld.js            Ammo.js init, physics world, static body helpers
+  carPhysics.js           btRaycastVehicle setup, preStep/postStep
 src/ui/
   ui.js                   proximity HUD prompt
   popup.js                location content popup
 ```
 
+## Physics Architecture (Ammo.js / Bullet)
+- **ammoWorld.js**: Initializes Ammo.js, creates btDiscreteDynamicsWorld with gravity -9.81
+  - Exports `initAmmoWorld()` (async), `getAmmo()`, `createStaticBody()`, `createDynamicBody()`
+- **carPhysics.js**: Creates btRigidBody chassis (box, 800kg) + btRaycastVehicle with 4 wheels
+  - Rear-wheel drive, front-wheel steering (lerped)
+  - Suspension: stiffness 30, damping 4, compression 2
+  - Engine force 2500N, brake force 80N, max steer 0.45 rad
+  - Angular factor constrained (0.1, 1, 0.3) to prevent easy rollover
+  - `preStep(keys)` applies engine/brake/steer from input
+  - `postStep()` reads Bullet transform into carState
+- **Ground**: btStaticPlaneShape at Y=0
+- **Trees**: 28 static btBoxShape colliders (trunk-sized)
+- **Buildings**: 4 static btBoxShape colliders matching building dimensions
+
 ## Car Design
 - WASD / arrow keys: W/S = forward/backward, A/D = steer
-- Pure kinematic: position/heading updated with math each step — no physics engine, no bouncing
-- Fixed Y height (GROUND_Y = 0.3), never falls or bounces
+- Physics-based: btRaycastVehicle with suspension, friction, forces
+- Car drops from Y=2 at start and settles on ground via physics
 - Front wheels visually steer (Y rotation). No wheel spin (user preference).
 - Dust particles emit from rear when moving
 
-## Collision System
-- **OBB (Oriented Bounding Box)** for the car: half-extents (0.5, 0.95) — matches the 1.0 x 1.9 body
-- **SAT (Separating Axis Theorem)** for detection against:
-  - **AABB colliders** for buildings (4 axes: car-localX, car-localZ, world-X, world-Z)
-  - **Circle colliders** for trees (closest-point-on-OBB method, radius 0.8)
-- **Resolution**: push car out along minimum-penetration axis, zero normal velocity component (slide along walls, no bounce)
-- **World boundary**: car is clamped to |x| < 140, |z| < 140
-- **VFX**: camera shake (intensity scales with impact speed) + dust burst on impact
-- Collision runs after `stepCar()` in `preStep()`, before mesh sync
-
 ## Game Loop
-Fixed-timestep accumulator at 60 Hz decoupled from display framerate:
 ```
-accumulate real delta time
-while (accumulator >= 1/60):
-  preStep(keys)   ← advance kinematic car state + resolve collisions
-  accumulator -= 1/60
-postStep()         ← sync mesh from state (once per render frame)
-consume collision  ← trigger camera shake if impact occurred
-camera update → render
+async main():
+  await initAmmoWorld()
+  ... create scene, car, world ...
+
+  loop(now):
+    dt = capped real delta
+    vehiclePreStep(keys)         <- apply forces from input
+    world.stepSimulation(dt, 3)  <- Bullet steps at 60Hz internally
+    vehiclePostStep()            <- read Bullet transform -> carState
+    syncMesh(carState)           <- update Three.js mesh
+    camera update -> render
 ```
 
 ## Claude Workflow Rules
@@ -67,5 +73,5 @@ camera update → render
 - One named export per file (`createX` factory pattern)
 - Module-level THREE reusables (`_euler`, `_quat`) — avoid per-frame allocation
 - `carState` object is the single source of truth for car position/rotation/speed
-- Proximity detection is pure distance math — no physics colliders needed for buildings
-- Collision uses pure math (SAT) — no physics engine
+- Proximity detection is pure distance math — no physics colliders needed for buildings (HUD only)
+- Ammo.js temp objects (btVector3, btTransform) allocated once in ammoWorld.js, reused
