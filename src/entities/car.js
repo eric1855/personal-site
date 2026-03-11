@@ -101,16 +101,18 @@ export function createCar(scene, colliders) {
 
   // Track collision state for VFX
   let collisionThisFrame = false
+  let impactSpeed = 0
 
   function preStep(keys) {
+    const prevSpeed = Math.abs(state.velocity)
     stepCar(state, keys)
 
     // Collision detection + resolution
     if (colliders && colliders.length > 0) {
-      const prevSpeed = Math.abs(state.velocity)
       const hit = resolveCollisions(state, colliders)
       if (hit && prevSpeed > 0.04) {
         collisionThisFrame = true
+        impactSpeed = Math.max(impactSpeed, prevSpeed)
       }
     }
   }
@@ -128,13 +130,23 @@ export function createCar(scene, colliders) {
     // Impact dust burst
     if (collisionThisFrame) {
       _emitBurst(dust, state)
-      collisionThisFrame = false
     }
 
     _updateDust(dust, state)
   }
 
-  return { carState: state, preStep, postStep }
+  /** Returns impact speed if collision occurred this frame, else 0. Resets flag. */
+  function consumeCollision() {
+    if (collisionThisFrame) {
+      collisionThisFrame = false
+      const spd = impactSpeed
+      impactSpeed = 0
+      return spd
+    }
+    return 0
+  }
+
+  return { carState: state, preStep, postStep, consumeCollision }
 }
 
 function _emitBurst(dust, state) {

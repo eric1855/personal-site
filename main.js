@@ -12,7 +12,7 @@ import { createPopup }      from './src/ui/popup.js'
 // Rendering
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
 
 // Input
 const { keys } = createInput()
@@ -25,7 +25,7 @@ const { locations } = createLocations(scene)
 const { colliders } = createColliderWorld()
 
 // Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, colliders)
+const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
 
 // HUD + popup
 const { updateProximityPrompt } = createUI()
@@ -62,6 +62,14 @@ function loop(now) {
   }
 
   carPostStep()
+
+  // Camera shake on collision (scale intensity by impact speed)
+  const impactSpeed = consumeCollision()
+  if (impactSpeed > 0) {
+    const MAX_SPEED = 0.18  // from carPhysics.js
+    const intensity = 0.08 + (impactSpeed / MAX_SPEED) * 0.25
+    shakeCamera(intensity)
+  }
 
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
