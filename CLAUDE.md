@@ -8,7 +8,7 @@ Drive near a building and press E to open it as a popup.
 ## Stack
 - **Vite** + vanilla JS (ESM modules), no React, no TypeScript
 - **Three.js** for 3D rendering
-- No physics engine — car uses pure kinematic math with OBB collision via SAT
+- **cannon-es** physics engine — simple rigid body car (Bruno Simon style)
 
 ## File Structure
 ```
@@ -19,44 +19,48 @@ src/core/
   camera.js               follow camera (fixed world-space offset) + shake effect
   input.js                keyboard state (WASD + E)
 src/entities/
-  car.js                  car mesh + kinematic step + dust particles + collision dust burst
-  worldObjects.js         ground mesh + trees
-  locations.js            portfolio buildings (mesh only, no physics)
+  car.js                  car mesh + dust particles + sync from cannon-es body
+  worldObjects.js         ground mesh + trees + cannon-es static bodies
+  locations.js            portfolio buildings + cannon-es static bodies
 src/physics/
-  carPhysics.js           kinematic car state + stepCar()
-  colliders.js            collider registry — AABB (buildings) + circle (trees)
-  collision.js            OBB-vs-AABB and OBB-vs-Circle SAT detection + resolution
+  engine.js               cannon-es world setup (gravity, materials, broadphase)
+  carPhysics.js           cannon-es rigid body car + force/steering logic
 src/ui/
   ui.js                   proximity HUD prompt
   popup.js                location content popup
 ```
 
+## Physics System (cannon-es)
+- **World**: CANNON.World with gravity (0, -20, 0), SAPBroadphase, sleep enabled
+- **Car**: single CANNON.Body (mass 20) with box shape matching the visual mesh (1.0 x 0.38 x 1.9)
+  - Movement: forward force applied along chassis heading when W pressed
+  - Braking: reverse force when S pressed (stronger when moving forward, weaker for reverse)
+  - Steering: angularVelocity.y set based on input, scaled by forward speed
+  - Lateral grip: 90% of lateral velocity removed each step for arcade feel
+  - Locked to ground: Y position fixed, rotation locked to Y-axis only
+  - Linear damping 0.6, angular damping 0.95 for arcade feel
+- **Ground**: CANNON.Plane (static, rotated to face +Y) with ground contact material
+- **Buildings**: CANNON.Box static bodies matching LOCATION_DEFS bodySize
+- **Trees**: CANNON.Cylinder static bodies (trunk radius ~0.2, scaled per tree)
+- **Contact materials**: ground-chassis (friction 0.5, restitution 0.0), default (friction 0.3, restitution 0.05)
+
 ## Car Design
 - WASD / arrow keys: W/S = forward/backward, A/D = steer
-- Pure kinematic: position/heading updated with math each step — no physics engine, no bouncing
-- Fixed Y height (GROUND_Y = 0.3), never falls or bounces
+- cannon-es rigid body: forces applied based on input, physics engine handles collision
+- Fixed Y height (GROUND_Y = 0.3), locked to Y-axis rotation only
 - Front wheels visually steer (Y rotation). No wheel spin (user preference).
 - Dust particles emit from rear when moving
-
-## Collision System
-- **OBB (Oriented Bounding Box)** for the car: half-extents (0.5, 0.95) — matches the 1.0 x 1.9 body
-- **SAT (Separating Axis Theorem)** for detection against:
-  - **AABB colliders** for buildings (4 axes: car-localX, car-localZ, world-X, world-Z)
-  - **Circle colliders** for trees (closest-point-on-OBB method, radius 0.8)
-- **Resolution**: push car out along minimum-penetration axis, zero normal velocity component (slide along walls, no bounce)
-- **World boundary**: car is clamped to |x| < 140, |z| < 140
-- **VFX**: camera shake (intensity scales with impact speed) + dust burst on impact
-- Collision runs after `stepCar()` in `preStep()`, before mesh sync
+- Max forward speed ~18, max reverse speed ~6
 
 ## Game Loop
 Fixed-timestep accumulator at 60 Hz decoupled from display framerate:
 ```
 accumulate real delta time
 while (accumulator >= 1/60):
-  preStep(keys)   ← advance kinematic car state + resolve collisions
+  carPreStep(keys)   ← apply forces/steering based on input
+  stepPhysics()      ← advance cannon-es world
   accumulator -= 1/60
-postStep()         ← sync mesh from state (once per render frame)
-consume collision  ← trigger camera shake if impact occurred
+carPostStep()        ← sync Three.js mesh from cannon body (once per render frame)
 camera update → render
 ```
 
@@ -66,6 +70,6 @@ camera update → render
 ## Conventions
 - One named export per file (`createX` factory pattern)
 - Module-level THREE reusables (`_euler`, `_quat`) — avoid per-frame allocation
-- `carState` object is the single source of truth for car position/rotation/speed
+- `carState` object is the single source of truth for car position/rotation/speed (synced from cannon body)
 - Proximity detection is pure distance math — no physics colliders needed for buildings
-- Collision uses pure math (SAT) — no physics engine
+- Collision handled entirely by cannon-es — no manual SAT or OBB code

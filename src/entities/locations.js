@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import * as CANNON from 'cannon-es'
 
 const LOCATION_DEFS = [
   {
@@ -83,11 +84,26 @@ function _buildLocationMesh(def) {
   return group
 }
 
-export function createLocations(scene) {
+export function createLocations(scene, world) {
   const locations = []
 
   for (const def of LOCATION_DEFS) {
     scene.add(_buildLocationMesh(def))
+
+    // Cannon-es static body for building collision
+    const buildingBody = new CANNON.Body({
+      type: CANNON.Body.STATIC,
+      position: new CANNON.Vec3(
+        def.position.x,
+        def.bodyY,
+        def.position.z
+      ),
+    })
+    buildingBody.addShape(new CANNON.Box(
+      new CANNON.Vec3(def.bodySize.w / 2, def.bodySize.h / 2, def.bodySize.d / 2)
+    ))
+    world.addBody(buildingBody)
+
     locations.push({
       id:       def.id,
       label:    def.label,

@@ -1,14 +1,13 @@
 import * as THREE from 'three'
+import * as CANNON from 'cannon-es'
 
-export function createWorldObjects(scene) {
-  _createGround(scene)
-  _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
+export function createWorldObjects(scene, world, groundMaterial) {
+  _createGround(scene, world, groundMaterial)
+  _createTrees(scene, world)
 }
 
-function _createGround(scene) {
+function _createGround(scene, world, groundMaterial) {
+  // Three.js ground mesh
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: '#4a7c59', side: THREE.DoubleSide, flatShading: true })
@@ -16,9 +15,19 @@ function _createGround(scene) {
   mesh.rotation.x = -Math.PI / 2
   mesh.receiveShadow = true
   scene.add(mesh)
+
+  // Cannon-es ground plane (infinite, faces up)
+  const groundBody = new CANNON.Body({
+    type: CANNON.Body.STATIC,
+    shape: new CANNON.Plane(),
+    material: groundMaterial,
+  })
+  // Rotate so the plane faces up (default Plane normal is +Z, we want +Y)
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0)
+  world.addBody(groundBody)
 }
 
-function _createTrees(scene) {
+function _createTrees(scene, world) {
   // All 28 positions from Scene.tsx — exact values
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
@@ -59,5 +68,16 @@ function _createTrees(scene) {
     })
 
     scene.add(group)
+
+    // Cannon-es static cylinder collider for the trunk
+    // Use a cylinder approximated as a box for simplicity (cannon-es Cylinder can be finicky)
+    const trunkRadius = 0.2 * scale
+    const trunkHeight = 1.6 * scale
+    const treeBody = new CANNON.Body({
+      type: CANNON.Body.STATIC,
+      position: new CANNON.Vec3(x, trunkHeight / 2, z),
+    })
+    treeBody.addShape(new CANNON.Cylinder(trunkRadius, trunkRadius, trunkHeight, 6))
+    world.addBody(treeBody)
   })
 }
