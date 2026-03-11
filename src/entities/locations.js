@@ -1,4 +1,9 @@
+/**
+ * Portfolio buildings — static cannon-es bodies.
+ * Can't be knocked over, but the car bounces off them.
+ */
 import * as THREE from 'three'
+import * as CANNON from 'cannon-es'
 
 const LOCATION_DEFS = [
   {
@@ -83,11 +88,24 @@ function _buildLocationMesh(def) {
   return group
 }
 
-export function createLocations(scene) {
+export function createLocations(scene, world, buildingMat) {
   const locations = []
 
   for (const def of LOCATION_DEFS) {
     scene.add(_buildLocationMesh(def))
+
+    // Static cannon-es body for each building
+    const hw = def.bodySize.w / 2
+    const hh = def.bodySize.h / 2
+    const hd = def.bodySize.d / 2
+    const buildingBody = new CANNON.Body({
+      type: CANNON.Body.STATIC,
+      shape: new CANNON.Box(new CANNON.Vec3(hw, hh, hd)),
+      material: buildingMat,
+      position: new CANNON.Vec3(def.position.x, def.bodyY, def.position.z),
+    })
+    world.addBody(buildingBody)
+
     locations.push({
       id:       def.id,
       label:    def.label,

@@ -1,14 +1,18 @@
+/**
+ * Ground plane + trees.
+ * Trees are DYNAMIC cannon-es bodies — the car can knock them over!
+ */
 import * as THREE from 'three'
+import * as CANNON from 'cannon-es'
 
-export function createWorldObjects(scene) {
-  _createGround(scene)
-  _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
+export function createWorldObjects(scene, world, materials) {
+  _createGround(scene, world, materials.groundMat)
+  const treeSyncList = _createTrees(scene, world, materials.objectMat)
+  return { treeSyncList }
 }
 
-function _createGround(scene) {
+function _createGround(scene, world, groundMat) {
+  // Three.js ground mesh
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: '#4a7c59', side: THREE.DoubleSide, flatShading: true })
@@ -16,10 +20,18 @@ function _createGround(scene) {
   mesh.rotation.x = -Math.PI / 2
   mesh.receiveShadow = true
   scene.add(mesh)
+
+  // Cannon-es ground plane
+  const groundBody = new CANNON.Body({
+    type: CANNON.Body.STATIC,
+    shape: new CANNON.Plane(),
+    material: groundMat,
+  })
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0)
+  world.addBody(groundBody)
 }
 
-function _createTrees(scene) {
-  // All 28 positions from Scene.tsx — exact values
+function _createTrees(scene, world, objectMat) {
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
     [-10, 0, 30],  [30, 0, 5],  [-35, 0, -5], [12, 0, -30],
@@ -30,13 +42,14 @@ function _createTrees(scene) {
     [-22, 0, -52], [44, 0, 28], [-38, 0, -30], [10, 0, -48],
   ]
 
-  treePositions.forEach(([x, y, z], i) => {
-    // Same scale formula and color selection as Scene.tsx
-    const scale      = 0.8 + Math.sin(i * 7.3) * 0.4
+  const syncList = []
+
+  treePositions.forEach(([x, _y, z], i) => {
+    const scale = 0.8 + Math.sin(i * 7.3) * 0.4
     const greenShade = i % 3 === 0 ? '#2d6a4f' : i % 3 === 1 ? '#40916c' : '#52b788'
 
     const group = new THREE.Group()
-    group.position.set(x, y, z)
+    group.position.set(x, 0, z)
     group.scale.setScalar(scale)
 
     // Trunk
@@ -48,7 +61,7 @@ function _createTrees(scene) {
     trunk.castShadow = true
     group.add(trunk)
 
-    // 3-tier foliage — [radius, height, segments, y-position]
+    // 3-tier foliage
     const tiers = [[1.2, 2.0, 6, 2.4], [0.9, 1.6, 6, 3.6], [0.5, 1.2, 5, 4.5]]
     const foliageMat = new THREE.MeshStandardMaterial({ color: greenShade, flatShading: true })
     tiers.forEach(([r, h, seg, py]) => {
@@ -59,5 +72,38 @@ function _createTrees(scene) {
     })
 
     scene.add(group)
+
+    // Cannon-es body — dynamic tree that can be knocked over
+    // Approximate as a cylinder (trunk) + sphere (foliage mass)
+    // Use a compound shape for realistic toppling
+    const trunkHeight = 1.6 * scale
+    const trunkRadius = 0.2 * scale
+    const foliageRadius = 1.0 * scale
+
+    const treeBody = new CANNON.Body({
+      mass: 8, // light enough to knock over
+      material: objectMat,
+      position: new CANNON.Vec3(x, 0, z),
+      linearDamping: 0.3,
+      angularDamping: 0.3,
+    })
+
+    // Trunk shape (cylinder)
+    const trunkShape = new CANNON.Cylinder(trunkRadius, trunkRadius * 1.3, trunkHeight, 6)
+    treeBody.addShape(trunkShape, new CANNON.Vec3(0, trunkHeight / 2, 0))
+
+    // Foliage shape (sphere at top)
+    const foliageShape = new CANNON.Sphere(foliageRadius)
+    treeBody.addShape(foliageShape, new CANNON.Vec3(0, trunkHeight + foliageRadius * 0.8, 0))
+
+    // Allow sleeping so static trees don't waste CPU
+    treeBody.sleepSpeedLimit = 0.3
+    treeBody.sleepTimeLimit = 1.0
+
+    world.addBody(treeBody)
+
+    syncList.push({ mesh: group, body: treeBody, scale })
   })
+
+  return syncList
 }

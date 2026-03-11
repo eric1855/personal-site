@@ -1,33 +1,45 @@
-import { createRenderer }   from './src/core/renderer.js'
-import { createScene }      from './src/core/scene.js'
-import { createCamera }     from './src/core/camera.js'
-import { createInput }      from './src/core/input.js'
-import { createCar }        from './src/entities/car.js'
-import { createWorldObjects } from './src/entities/worldObjects.js'
-import { createLocations }  from './src/entities/locations.js'
-import { createColliderWorld } from './src/physics/colliders.js'
-import { createUI }         from './src/ui/ui.js'
-import { createPopup }      from './src/ui/popup.js'
+/**
+ * Main game loop — cannon-es physics with interactive world objects.
+ *
+ * Fixed-timestep accumulator at 60 Hz. Each tick:
+ *   1. Process car input (sets velocity on cannon body)
+ *   2. Step the cannon-es world (resolves all collisions)
+ *   3. Sync all Three.js meshes from cannon bodies
+ */
+import { createRenderer }      from './src/core/renderer.js'
+import { createScene }          from './src/core/scene.js'
+import { createCamera }         from './src/core/camera.js'
+import { createInput }          from './src/core/input.js'
+import { createPhysicsWorld }   from './src/physics/engine.js'
+import { createCar }            from './src/entities/car.js'
+import { createWorldObjects }   from './src/entities/worldObjects.js'
+import { createLocations }      from './src/entities/locations.js'
+import { createInteractables }  from './src/entities/interactables.js'
+import { createUI }             from './src/ui/ui.js'
+import { createPopup }          from './src/ui/popup.js'
 
-// Rendering
+// ── Rendering ───────────────────────────────────────────────────
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
 
-// Input
+// ── Input ───────────────────────────────────────────────────────
 const { keys } = createInput()
 
-// World
-createWorldObjects(scene)
-const { locations } = createLocations(scene)
+// ── Physics ─────────────────────────────────────────────────────
+const { world, materials } = createPhysicsWorld()
 
-// Collision world
-const { colliders } = createColliderWorld()
+// ── World ───────────────────────────────────────────────────────
+const { treeSyncList } = createWorldObjects(scene, world, materials)
+const { locations }    = createLocations(scene, world, materials.buildingMat)
 
-// Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
+// ── Car ─────────────────────────────────────────────────────────
+const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, world, materials.carMat)
 
-// HUD + popup
+// ── Interactive objects ─────────────────────────────────────────
+const { syncList: interactSyncList } = createInteractables(scene, world, materials.objectMat)
+
+// ── HUD + popup ─────────────────────────────────────────────────
 const { updateProximityPrompt } = createUI()
 const popup = createPopup(() => { isPaused = false })
 
@@ -44,7 +56,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix()
 })
 
-// Fixed-timestep game loop — physics always runs at 60 Hz regardless of display framerate
+// ── Fixed-timestep game loop ────────────────────────────────────
 const FIXED_DT  = 1 / 60
 let prevTime    = performance.now()
 let accumulator = 0
@@ -57,20 +69,22 @@ function loop(now) {
   accumulator  += elapsed
 
   while (accumulator >= FIXED_DT) {
-    if (!isPaused) carPreStep(keys)
+    if (!isPaused) {
+      // 1. Process car input → sets velocity on cannon body
+      carPreStep(keys)
+
+      // 2. Step the physics world
+      world.step(FIXED_DT)
+    }
     accumulator -= FIXED_DT
   }
 
+  // 3. Sync all Three.js meshes from cannon bodies
   carPostStep()
+  _syncDynamicBodies(treeSyncList)
+  _syncDynamicBodies(interactSyncList)
 
-  // Camera shake on collision (scale intensity by impact speed)
-  const impactSpeed = consumeCollision()
-  if (impactSpeed > 0) {
-    const MAX_SPEED = 0.18  // from carPhysics.js
-    const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
-    shakeCamera(intensity)
-  }
-
+  // ── Proximity / interaction ─────────────────────────────────
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
 
@@ -86,6 +100,25 @@ function loop(now) {
 }
 
 loop(performance.now())
+
+// ── Helpers ─────────────────────────────────────────────────────
+
+function _syncDynamicBodies(syncList) {
+  for (const item of syncList) {
+    const { mesh, body, scale } = item
+
+    if (scale) {
+      // Trees: mesh origin is at ground level, body origin is at center of mass
+      // We need to account for the scale and body offset
+      mesh.position.set(body.position.x, body.position.y, body.position.z)
+      mesh.quaternion.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w)
+    } else {
+      // Simple objects: mesh origin matches body origin
+      mesh.position.set(body.position.x, body.position.y, body.position.z)
+      mesh.quaternion.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w)
+    }
+  }
+}
 
 function _findNearest(pos, locations) {
   let best = null, bestD = Infinity
