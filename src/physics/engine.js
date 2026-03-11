@@ -1,15 +1,21 @@
-import RAPIER from '@dimforge/rapier3d-compat'
+import { World } from 'oimo'
 
-export async function createPhysicsEngine() {
-  // WASM must be initialized before any RAPIER objects are created
-  await RAPIER.init()
-
-  // Gravity matches Scene.tsx: gravity={[0, -20, 0]}
-  const world = new RAPIER.World({ x: 0, y: -20, z: 0 })
+/**
+ * Create the Oimo physics world.
+ * Synchronous — no WASM init needed (pure JS).
+ */
+export function createPhysicsEngine() {
+  const world = new World({
+    timestep: 1 / 60,
+    iterations: 8,
+    gravity: [0, -20, 0],
+    broadphase: 2, // SAP broadphase
+    worldscale: 1,
+  })
 
   function step() {
     world.step()
   }
 
-  return { RAPIER, world, step }
+  return { world, step }
 }

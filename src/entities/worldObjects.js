@@ -1,14 +1,16 @@
 import * as THREE from 'three'
 
-export function createWorldObjects(scene) {
-  _createGround(scene)
-  _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
+/**
+ * Create ground mesh + tree meshes, and register static Oimo bodies for them.
+ * @param {THREE.Scene} scene
+ * @param {import('oimo').World} world — Oimo physics world
+ */
+export function createWorldObjects(scene, world) {
+  _createGround(scene, world)
+  _createTrees(scene, world)
 }
 
-function _createGround(scene) {
+function _createGround(scene, world) {
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: '#4a7c59', side: THREE.DoubleSide, flatShading: true })
@@ -16,9 +18,45 @@ function _createGround(scene) {
   mesh.rotation.x = -Math.PI / 2
   mesh.receiveShadow = true
   scene.add(mesh)
+
+  // Static ground body — large flat box at Y = -0.5 (top surface at Y = 0)
+  world.add({
+    type: 'box',
+    size: [300, 1, 300],
+    pos: [0, -0.5, 0],
+    rot: [0, 0, 0],
+    move: false,
+    density: 1,
+    friction: 0.8,
+    restitution: 0.0,
+    name: 'ground',
+  })
+
+  // World boundary walls — invisible static boxes
+  const wallH = 10
+  const wallThick = 2
+  const half = 150
+  const walls = [
+    { pos: [ half + wallThick / 2, wallH / 2, 0], size: [wallThick, wallH, 300] },
+    { pos: [-half - wallThick / 2, wallH / 2, 0], size: [wallThick, wallH, 300] },
+    { pos: [0, wallH / 2,  half + wallThick / 2], size: [300, wallH, wallThick] },
+    { pos: [0, wallH / 2, -half - wallThick / 2], size: [300, wallH, wallThick] },
+  ]
+  for (const w of walls) {
+    world.add({
+      type: 'box',
+      size: w.size,
+      pos: w.pos,
+      move: false,
+      density: 1,
+      friction: 0.5,
+      restitution: 0.2,
+      name: 'wall',
+    })
+  }
 }
 
-function _createTrees(scene) {
+function _createTrees(scene, world) {
   // All 28 positions from Scene.tsx — exact values
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
@@ -59,5 +97,20 @@ function _createTrees(scene) {
     })
 
     scene.add(group)
+
+    // Static cylinder collider for tree trunk
+    // Oimo cylinder: size = [radius, height]
+    const trunkRadius = 0.35 * scale  // slightly larger than visual trunk for game feel
+    const trunkHeight = 2.0 * scale
+    world.add({
+      type: 'cylinder',
+      size: [trunkRadius, trunkHeight],
+      pos: [x, trunkHeight / 2, z],
+      move: false,
+      density: 1,
+      friction: 0.4,
+      restitution: 0.3,
+      name: `tree_${i}`,
+    })
   })
 }

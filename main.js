@@ -1,31 +1,33 @@
-import { createRenderer }   from './src/core/renderer.js'
-import { createScene }      from './src/core/scene.js'
-import { createCamera }     from './src/core/camera.js'
-import { createInput }      from './src/core/input.js'
-import { createCar }        from './src/entities/car.js'
-import { createWorldObjects } from './src/entities/worldObjects.js'
-import { createLocations }  from './src/entities/locations.js'
-import { createColliderWorld } from './src/physics/colliders.js'
-import { createUI }         from './src/ui/ui.js'
-import { createPopup }      from './src/ui/popup.js'
+import { createRenderer }       from './src/core/renderer.js'
+import { createScene }          from './src/core/scene.js'
+import { createCamera }         from './src/core/camera.js'
+import { createInput }          from './src/core/input.js'
+import { createPhysicsEngine }  from './src/physics/engine.js'
+import { createCar }            from './src/entities/car.js'
+import { createWorldObjects }   from './src/entities/worldObjects.js'
+import { createLocations }      from './src/entities/locations.js'
+import { createUI }             from './src/ui/ui.js'
+import { createPopup }          from './src/ui/popup.js'
 
 // Rendering
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera } = createCamera(window.innerWidth / window.innerHeight)
 
 // Input
 const { keys } = createInput()
 
-// World
-createWorldObjects(scene)
-const { locations } = createLocations(scene)
+// Physics — Oimo.js (synchronous, no WASM init needed)
+const { world, step: stepPhysics } = createPhysicsEngine()
 
-// Collision world
-const { colliders } = createColliderWorld()
+// World (static bodies for ground, trees, walls)
+createWorldObjects(scene, world)
 
-// Car (pure kinematic — no physics engine, OBB collision via SAT)
-const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } = createCar(scene, colliders)
+// Buildings (static bodies)
+const { locations } = createLocations(scene, world)
+
+// Car (Oimo dynamic body)
+const { carState, preStep: carPreStep, postStep: carPostStep } = createCar(scene, world)
 
 // HUD + popup
 const { updateProximityPrompt } = createUI()
@@ -58,18 +60,11 @@ function loop(now) {
 
   while (accumulator >= FIXED_DT) {
     if (!isPaused) carPreStep(keys)
+    stepPhysics()
     accumulator -= FIXED_DT
   }
 
   carPostStep()
-
-  // Camera shake on collision (scale intensity by impact speed)
-  const impactSpeed = consumeCollision()
-  if (impactSpeed > 0) {
-    const MAX_SPEED = 0.18  // from carPhysics.js
-    const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
-    shakeCamera(intensity)
-  }
 
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)

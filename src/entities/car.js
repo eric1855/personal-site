@@ -1,15 +1,13 @@
 import * as THREE from 'three'
-import { createCarState, stepCar } from '../physics/carPhysics.js'
-import { resolveCollisions } from '../physics/collision.js'
+import { createCarState, stepCar, CAR_SIZE, CAR_START_Y } from '../physics/carPhysics.js'
 
 // Dust constants
 const MAX_PARTICLES        = 120
 const PARTICLE_LIFETIME    = 35
-const EMIT_SPEED_THRESHOLD = 0.01
-const BURST_PARTICLE_COUNT = 18
+const EMIT_SPEED_THRESHOLD = 0.6
 
 // Module-level reusable
-const _euler = new THREE.Euler()
+const _pos = new THREE.Vector3()
 
 function buildCarMesh() {
   const group = new THREE.Group()
@@ -92,85 +90,76 @@ function buildDustSystem(scene) {
   return { geo, mat, positions, particles: [] }
 }
 
-export function createCar(scene, colliders) {
+/**
+ * Create the car entity.
+ * @param {THREE.Scene} scene
+ * @param {import('oimo').World} world — Oimo physics world
+ * @returns carState (for camera), preStep, postStep
+ */
+export function createCar(scene, world) {
   const { group: carGroup, flGroup, frGroup } = buildCarMesh()
   scene.add(carGroup)
 
   const dust  = buildDustSystem(scene)
   const state = createCarState()
 
-  // Track collision state for VFX
-  let collisionThisFrame = false
-  let impactSpeed = 0
+  // Create the Oimo dynamic body for the car
+  const carBody = world.add({
+    type: 'box',
+    size: [CAR_SIZE.w, CAR_SIZE.h, CAR_SIZE.d],
+    pos: [0, CAR_START_Y, 0],
+    rot: [0, 0, 0],
+    move: true,
+    density: 1,
+    friction: 0.6,
+    restitution: 0.1,
+    neverSleep: true,
+    name: 'car',
+  })
+
+  // Expose position as a THREE.Vector3 for camera & proximity checks
+  // This gets updated every postStep
+  const carPosition = new THREE.Vector3(0, CAR_START_Y, 0)
+
+  // Expose a carState-like interface for camera and proximity
+  const carState = {
+    position: carPosition,
+    rotation: 0,  // Y heading in radians
+    speed: 0,
+    steer: 0,
+  }
 
   function preStep(keys) {
-    const prevSpeed = Math.abs(state.velocity)
-    stepCar(state, keys)
-
-    // Collision detection + resolution
-    if (colliders && colliders.length > 0) {
-      const hit = resolveCollisions(state, colliders)
-      if (hit && prevSpeed > 0.04) {
-        collisionThisFrame = true
-        impactSpeed = Math.max(impactSpeed, prevSpeed)
-      }
-    }
+    stepCar(carBody, state, keys)
   }
 
   function postStep() {
-    // Sync mesh from kinematic state
-    carGroup.position.copy(state.position)
-    _euler.set(0, state.rotation, 0)
-    carGroup.quaternion.setFromEuler(_euler)
+    // Read position from Oimo body
+    const p = carBody.getPosition()
+    carPosition.set(p.x, p.y, p.z)
+
+    // Read heading from Oimo body quaternion
+    const q = carBody.getQuaternion()
+    carState.rotation = Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.z * q.z))
+    carState.speed = state.speed
+    carState.steer = state.steer
+
+    // Sync Three.js mesh
+    carGroup.position.copy(carPosition)
+    carGroup.quaternion.set(q.x, q.y, q.z, q.w)
 
     // Front wheel visual steering
-    flGroup.rotation.y = state.steer
-    frGroup.rotation.y = state.steer
+    flGroup.rotation.y = state.steer / MAX_STEER_FOR_VISUAL * 0.5
+    frGroup.rotation.y = state.steer / MAX_STEER_FOR_VISUAL * 0.5
 
-    // Impact dust burst
-    if (collisionThisFrame) {
-      _emitBurst(dust, state)
-    }
-
-    _updateDust(dust, state)
+    _updateDust(dust, carState)
   }
 
-  /** Returns impact speed if collision occurred this frame, else 0. Resets flag. */
-  function consumeCollision() {
-    if (collisionThisFrame) {
-      collisionThisFrame = false
-      const spd = impactSpeed
-      impactSpeed = 0
-      return spd
-    }
-    return 0
-  }
-
-  return { carState: state, preStep, postStep, consumeCollision }
+  return { carState, preStep, postStep }
 }
 
-function _emitBurst(dust, state) {
-  const { position, rotation } = state
-  const { particles } = dust
-  for (let i = 0; i < BURST_PARTICLE_COUNT && particles.length < MAX_PARTICLES; i++) {
-    const angle = Math.random() * Math.PI * 2
-    const spd = 0.03 + Math.random() * 0.06
-    particles.push({
-      position: new THREE.Vector3(
-        position.x + (Math.random() - 0.5) * 1.2,
-        0.15 + Math.random() * 0.25,
-        position.z + (Math.random() - 0.5) * 1.2
-      ),
-      velocity: new THREE.Vector3(
-        Math.cos(angle) * spd,
-        0.02 + Math.random() * 0.04,
-        Math.sin(angle) * spd
-      ),
-      life: PARTICLE_LIFETIME,
-      maxLife: PARTICLE_LIFETIME,
-    })
-  }
-}
+// Visual steering clamp (just for wheel rotation visual)
+const MAX_STEER_FOR_VISUAL = 2.8
 
 function _updateDust(dust, state) {
   const { position, rotation, speed } = state
@@ -179,7 +168,7 @@ function _updateDust(dust, state) {
   if (Math.abs(speed) > EMIT_SPEED_THRESHOLD && particles.length < MAX_PARTICLES) {
     const rearX = position.x - Math.sin(rotation) * 1.05
     const rearZ = position.z - Math.cos(rotation) * 1.05
-    const count = speed > 0.1 ? 2 : 1
+    const count = speed > 5 ? 2 : 1
     for (let i = 0; i < count; i++) {
       particles.push({
         position: new THREE.Vector3(

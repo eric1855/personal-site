@@ -83,11 +83,29 @@ function _buildLocationMesh(def) {
   return group
 }
 
-export function createLocations(scene) {
+/**
+ * Create location meshes + static Oimo bodies.
+ * @param {THREE.Scene} scene
+ * @param {import('oimo').World} world — Oimo physics world
+ */
+export function createLocations(scene, world) {
   const locations = []
 
   for (const def of LOCATION_DEFS) {
     scene.add(_buildLocationMesh(def))
+
+    // Static Oimo box collider for building
+    world.add({
+      type: 'box',
+      size: [def.bodySize.w, def.bodySize.h, def.bodySize.d],
+      pos: [def.position.x, def.bodyY, def.position.z],
+      move: false,
+      density: 1,
+      friction: 0.5,
+      restitution: 0.2,
+      name: `building_${def.id}`,
+    })
+
     locations.push({
       id:       def.id,
       label:    def.label,
