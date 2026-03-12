@@ -1,5 +1,10 @@
 import * as THREE from 'three'
-import { createCarPhysics } from '../physics/carPhysics.js'
+import {
+  carState,
+  createCarPhysics,
+  preStep as physicsPreStep,
+  postStep as physicsPostStep,
+} from '../physics/carPhysics.js'
 
 // Dust constants
 const MAX_PARTICLES        = 120
@@ -95,7 +100,7 @@ export function createCar(scene, RAPIER, world) {
   scene.add(carGroup)
 
   const dust = buildDustSystem(scene)
-  const { carState, preStep: physicsPreStep, postStep: physicsPostStep, rigidBody } = createCarPhysics(RAPIER, world)
+  createCarPhysics(world, RAPIER)
 
   function preStep(keys) {
     physicsPreStep(keys)
@@ -104,10 +109,11 @@ export function createCar(scene, RAPIER, world) {
   function postStep() {
     physicsPostStep()
 
-    // Sync mesh from Rapier state
+    // Sync mesh position from Rapier state
     carGroup.position.copy(carState.position)
-    _euler.set(0, carState.rotation, 0)
-    carGroup.quaternion.setFromEuler(_euler)
+
+    // Sync mesh rotation from Rapier quaternion
+    carGroup.quaternion.copy(carState.quaternion)
 
     // Front wheel visual steering
     flGroup.rotation.y = carState.steer
