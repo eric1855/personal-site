@@ -42,6 +42,9 @@ const ROLL_INFLUENCE   = 0.08
 // Start position
 const START_Y = 2.0  // drop car from a small height to let it settle
 
+// Module-level reusables (avoid per-frame allocation)
+const _euler = new THREE.Euler()
+
 // ── State object (for camera / HUD / dust) ────────────────────────────────────
 export function createCarState() {
   return {
@@ -189,9 +192,8 @@ export function createVehiclePhysics(world) {
     carState.quaternion.set(rot.x(), rot.y(), rot.z(), rot.w())
 
     // Extract Y heading from quaternion for compatibility
-    const euler = new THREE.Euler()
-    euler.setFromQuaternion(carState.quaternion, 'YXZ')
-    carState.rotation = euler.y
+    _euler.setFromQuaternion(carState.quaternion, 'YXZ')
+    carState.rotation = _euler.y
 
     // Speed (magnitude of linear velocity)
     const vel = chassisBody.getLinearVelocity()

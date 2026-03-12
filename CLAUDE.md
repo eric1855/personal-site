@@ -36,10 +36,12 @@ src/ui/
 - **carPhysics.js**: Creates btRigidBody chassis (box, 800kg) + btRaycastVehicle with 4 wheels
   - Rear-wheel drive, front-wheel steering (lerped)
   - Suspension: stiffness 30, damping 4, compression 2
-  - Engine force 2500N, brake force 80N, max steer 0.45 rad
+  - Engine force 2500N, brake force 80N, max steer 0.38 rad, steer lerp 0.10
+  - **Speed-dependent steering**: at high speed, max steer angle scales down to 15% (factor = max(0.15, 1 - speed/15)) to prevent 180 spins
   - Angular factor constrained (0.1, 1, 0.3) to prevent easy rollover
-  - `preStep(keys)` applies engine/brake/steer from input
-  - `postStep()` reads Bullet transform into carState
+  - **Angular velocity Y clamped** to +/-2.5 rad/s in postStep() to prevent excessive yaw
+  - `preStep(keys)` applies engine/brake/steer from input (with speed-dependent steering reduction)
+  - `postStep()` reads Bullet transform into carState, clamps angular velocity Y
 - **Ground**: btStaticPlaneShape at Y=0
 - **Trees**: 28 static btBoxShape colliders (trunk-sized)
 - **Buildings**: 4 static btBoxShape colliders matching building dimensions
