@@ -1,11 +1,13 @@
 import * as THREE from 'three'
 
+/**
+ * Creates the ground plane and tree visual meshes.
+ * Trees are returned as a list for syncing with their Rapier dynamic bodies.
+ */
 export function createWorldObjects(scene) {
   _createGround(scene)
-  _createTrees(scene)
-  // Stubs for future world content:
-  // _createBuildings(scene, world)
-  // _createInteractables(scene, world)
+  const treeMeshes = _createTrees(scene)
+  return { treeMeshes }
 }
 
 function _createGround(scene) {
@@ -30,13 +32,17 @@ function _createTrees(scene) {
     [-22, 0, -52], [44, 0, 28], [-38, 0, -30], [10, 0, -48],
   ]
 
+  const treeMeshes = []
+
   treePositions.forEach(([x, y, z], i) => {
     // Same scale formula and color selection as Scene.tsx
     const scale      = 0.8 + Math.sin(i * 7.3) * 0.4
     const greenShade = i % 3 === 0 ? '#2d6a4f' : i % 3 === 1 ? '#40916c' : '#52b788'
 
     const group = new THREE.Group()
-    group.position.set(x, y, z)
+    // Position will be synced from Rapier body each frame.
+    // Set initial position here for first render before physics step.
+    group.position.set(x, 0, z)
     group.scale.setScalar(scale)
 
     // Trunk
@@ -59,5 +65,8 @@ function _createTrees(scene) {
     })
 
     scene.add(group)
+    treeMeshes.push({ mesh: group, scale })
   })
+
+  return treeMeshes
 }

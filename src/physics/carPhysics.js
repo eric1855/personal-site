@@ -1,5 +1,8 @@
 // Variant 5: Smooth / Floaty (Mario Kart feel)
 // Punchy off the line, sharp braking, bell-curve turn rate that peaks at mid-speed.
+//
+// Hybrid approach: kinematic math computes desired heading/speed,
+// then we SET the Rapier body's linear velocity to match (+ override Y to stay grounded).
 import * as THREE from 'three'
 
 const ACCEL      = 0.007
@@ -17,6 +20,10 @@ export function createCarState() {
   }
 }
 
+/**
+ * Pure kinematic step — computes desired position/heading/speed.
+ * Does NOT touch Rapier. Call syncToRapier() after this.
+ */
 export function stepCar(state, keys) {
   const targetSteer = keys.left ? MAX_STEER : keys.right ? -MAX_STEER : 0
   state.steer += (targetSteer - state.steer) * STEER_LERP
@@ -39,8 +46,39 @@ export function stepCar(state, keys) {
     state.rotation += state.steer * Math.sign(state.velocity) * turnCurve * 0.065
   }
 
-  state.position.x += Math.sin(state.rotation) * state.velocity
-  state.position.z += Math.cos(state.rotation) * state.velocity
-  state.position.y  = GROUND_Y
+  // Compute desired XZ displacement per tick (at 60 Hz)
+  state._desiredVx = Math.sin(state.rotation) * state.velocity * 60
+  state._desiredVz = Math.cos(state.rotation) * state.velocity * 60
   state.speed = Math.abs(state.velocity)
+}
+
+/**
+ * Push the kinematic-computed velocity into the Rapier dynamic body.
+ * Also sets the body rotation and overrides Y velocity to keep the car grounded.
+ */
+export function syncToRapier(state, carBody, GROUND_Y_VAL) {
+  // Set linear velocity — XZ from kinematic math, Y pushes toward ground
+  const pos = carBody.translation()
+  const yError = GROUND_Y_VAL - pos.y
+  const yVel = yError * 20  // stiff spring to keep car at ground height
+
+  carBody.setLinvel({ x: state._desiredVx || 0, y: yVel, z: state._desiredVz || 0 }, true)
+
+  // Set rotation (Y-axis only) as quaternion
+  const halfAngle = state.rotation * 0.5
+  carBody.setRotation({
+    x: 0,
+    y: Math.sin(halfAngle),
+    z: 0,
+    w: Math.cos(halfAngle),
+  }, true)
+}
+
+/**
+ * After Rapier steps, read the car body's actual position back into carState.
+ * This captures any collision push-out that Rapier applied.
+ */
+export function readFromRapier(state, carBody) {
+  const pos = carBody.translation()
+  state.position.set(pos.x, GROUND_Y, pos.z)
 }

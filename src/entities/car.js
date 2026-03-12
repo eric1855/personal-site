@@ -1,6 +1,5 @@
 import * as THREE from 'three'
-import { createCarState, stepCar } from '../physics/carPhysics.js'
-import { stepPhysicsAndResolve } from '../physics/collision.js'
+import { createCarState, stepCar, syncToRapier, readFromRapier, GROUND_Y } from '../physics/carPhysics.js'
 
 // Dust constants
 const MAX_PARTICLES        = 120
@@ -104,21 +103,27 @@ export function createCar(scene, rapierCtx) {
   // Track collision state for VFX
   let collisionThisFrame = false
   let impactSpeed = 0
+  let prevSpeed = 0
 
   function preStep(keys) {
-    const prevSpeed = Math.abs(state.velocity)
+    prevSpeed = Math.abs(state.velocity)
+
+    // 1. Kinematic math — compute desired heading/speed
     stepCar(state, keys)
 
-    // Rapier collision detection + resolution
-    const hit = stepPhysicsAndResolve(RAPIER, world, carBody, carCollider, state)
-    if (hit && prevSpeed > 0.04) {
-      collisionThisFrame = true
-      impactSpeed = Math.max(impactSpeed, prevSpeed)
-    }
+    // 2. Push velocity into Rapier dynamic body
+    syncToRapier(state, carBody, GROUND_Y)
   }
 
+  /**
+   * Called after world.step() — reads the car's actual position from Rapier
+   * (which may differ from kinematic intent due to collision response).
+   */
   function postStep() {
-    // Sync mesh from kinematic state
+    // Read back position from Rapier (captures collision push-out)
+    readFromRapier(state, carBody)
+
+    // Sync mesh from state
     carGroup.position.copy(state.position)
     _euler.set(0, state.rotation, 0)
     carGroup.quaternion.setFromEuler(_euler)
@@ -126,6 +131,14 @@ export function createCar(scene, rapierCtx) {
     // Front wheel visual steering
     flGroup.rotation.y = state.steer
     frGroup.rotation.y = state.steer
+
+    // Check for collision via Rapier contact pairs
+    world.contactPairsWith(carCollider, (otherCollider) => {
+      if (prevSpeed > 0.04) {
+        collisionThisFrame = true
+        impactSpeed = Math.max(impactSpeed, prevSpeed)
+      }
+    })
 
     // Impact dust burst
     if (collisionThisFrame) {
