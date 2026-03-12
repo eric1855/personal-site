@@ -32,8 +32,8 @@ const MAX_SUSPENSION_FORCE   = 10000
 // Driving
 const ENGINE_FORCE    = 2500
 const BRAKE_FORCE     = 80
-const MAX_STEER_ANGLE = 0.45   // radians (~26 degrees)
-const STEER_LERP      = 0.12   // how fast steering converges
+const MAX_STEER_ANGLE = 0.38   // radians (~22 degrees) — reduced to prevent high-speed spins
+const STEER_LERP      = 0.10   // how fast steering converges
 
 // Friction
 const WHEEL_FRICTION  = 3.0
@@ -134,8 +134,11 @@ export function createVehiclePhysics(world) {
 
   // ── preStep: apply input forces ────────────────────────────────────────────
   function preStep(keys) {
-    // Steering
-    const targetSteer = keys.left ? MAX_STEER_ANGLE : keys.right ? -MAX_STEER_ANGLE : 0
+    // Steering — reduce max angle at high speed to prevent 180 spins
+    const forwardSpeed = carState.velocity  // approximate km/h-ish
+    const steerFactor = Math.max(0.15, 1.0 - (Math.abs(forwardSpeed) / 15))
+    const steerDir = keys.left ? 1 : keys.right ? -1 : 0
+    const targetSteer = steerDir * MAX_STEER_ANGLE * steerFactor
     currentSteer += (targetSteer - currentSteer) * STEER_LERP
 
     vehicle.setSteeringValue(currentSteer, 0) // FL
@@ -194,6 +197,14 @@ export function createVehiclePhysics(world) {
     const vel = chassisBody.getLinearVelocity()
     carState.velocity = Math.sqrt(vel.x() * vel.x() + vel.z() * vel.z())
     carState.speed    = carState.velocity
+
+    // Clamp angular velocity Y to prevent excessive yaw / 180 spins
+    const angvel = chassisBody.getAngularVelocity()
+    const maxYaw = 2.5  // rad/s — tighter clamp to prevent 180 spins
+    if (Math.abs(angvel.y()) > maxYaw) {
+      angvel.setY(Math.sign(angvel.y()) * maxYaw)
+      chassisBody.setAngularVelocity(angvel)
+    }
 
     // Steer (for visual wheel rotation)
     carState.steer = currentSteer
