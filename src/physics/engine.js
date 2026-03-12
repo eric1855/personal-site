@@ -7,7 +7,7 @@ import RAPIER from '@dimforge/rapier3d-compat'
 export async function createPhysicsEngine() {
   await RAPIER.init()
 
-  const world = new RAPIER.World({ x: 0, y: -30, z: 0 })
+  const world = new RAPIER.World({ x: 0, y: -20, z: 0 })
 
   function step() {
     world.step()
