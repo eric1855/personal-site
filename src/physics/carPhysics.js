@@ -79,7 +79,7 @@ export function createCarPhysics(world, groundMaterial) {
   const wheelOptions = {
     radius: WHEEL_RADIUS,
     directionLocal: new CANNON.Vec3(0, -1, 0),
-    axleLocal: new CANNON.Vec3(-1, 0, 0),
+    axleLocal: new CANNON.Vec3(1, 0, 0),
     suspensionStiffness: SUSPENSION_STIFFNESS,
     dampingRelaxation: SUSPENSION_DAMPING,
     dampingCompression: SUSPENSION_COMPRESSION,
