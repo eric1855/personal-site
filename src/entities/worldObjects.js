@@ -15,7 +15,7 @@ function _createGround(scene, RAPIER, world) {
   mesh.receiveShadow = true
   scene.add(mesh)
 
-  // Rapier static ground collider — thin cuboid at y=0
+  // Rapier static ground collider — cuboid at y=-0.5, surface at y=0
   const groundBody = world.createRigidBody(
     RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5, 0)
   )
@@ -28,7 +28,7 @@ function _createGround(scene, RAPIER, world) {
 }
 
 function _createTrees(scene, RAPIER, world) {
-  // All 28 positions from Scene.tsx — exact values
+  // All 28 positions — exact values
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
     [-10, 0, 30],  [30, 0, 5],  [-35, 0, -5], [12, 0, -30],
@@ -40,7 +40,6 @@ function _createTrees(scene, RAPIER, world) {
   ]
 
   treePositions.forEach(([x, y, z], i) => {
-    // Same scale formula and color selection as Scene.tsx
     const scale      = 0.8 + Math.sin(i * 7.3) * 0.4
     const greenShade = i % 3 === 0 ? '#2d6a4f' : i % 3 === 1 ? '#40916c' : '#52b788'
 
@@ -70,9 +69,8 @@ function _createTrees(scene, RAPIER, world) {
     scene.add(group)
 
     // Rapier static cylinder collider for the trunk
-    // Use a cylinder with radius proportional to the tree scale
-    const trunkRadius = 0.4 * scale
-    const trunkHeight = 2.5 * scale
+    const trunkRadius = 0.5 * scale
+    const trunkHeight = 4.0 * scale
     const treeBody = world.createRigidBody(
       RAPIER.RigidBodyDesc.fixed().setTranslation(x, trunkHeight / 2, z)
     )
