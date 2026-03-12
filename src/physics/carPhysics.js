@@ -128,9 +128,11 @@ export function createCarPhysics(world, groundMaterial) {
     vehicle.setSteeringValue(currentSteer, 1) // front-right
 
     // Engine force on rear wheels (RWD)
+    // cannon-es forwardWS = surfNormal×axle = (0,1,0)×(1,0,0) = (0,0,-1)
+    // so NEGATIVE engine force → +Z impulse → visual forward
     if (keys.forward) {
-      vehicle.applyEngineForce(MAX_FORCE, 2)
-      vehicle.applyEngineForce(MAX_FORCE, 3)
+      vehicle.applyEngineForce(-MAX_FORCE, 2)
+      vehicle.applyEngineForce(-MAX_FORCE, 3)
       vehicle.setBrake(0, 0)
       vehicle.setBrake(0, 1)
       vehicle.setBrake(0, 2)
@@ -151,9 +153,9 @@ export function createCarPhysics(world, groundMaterial) {
         vehicle.setBrake(MAX_BRAKE, 2)
         vehicle.setBrake(MAX_BRAKE, 3)
       } else {
-        // Stopped or rolling back — reverse
-        vehicle.applyEngineForce(-MAX_FORCE * 0.4, 2)
-        vehicle.applyEngineForce(-MAX_FORCE * 0.4, 3)
+        // Stopped or rolling back — reverse (positive force → -Z → visual backward)
+        vehicle.applyEngineForce(MAX_FORCE * 0.4, 2)
+        vehicle.applyEngineForce(MAX_FORCE * 0.4, 3)
         vehicle.setBrake(0, 0)
         vehicle.setBrake(0, 1)
         vehicle.setBrake(0, 2)
