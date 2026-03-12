@@ -8,6 +8,10 @@
 import * as CANNON from 'cannon-es'
 import * as THREE from 'three'
 
+// ── Module-level reusables (avoid per-frame allocations) ─────────────────
+const _fwdVec = new CANNON.Vec3(0, 0, 1)
+const _euler  = new THREE.Euler()
+
 // ── Chassis dimensions (match Three.js BoxGeometry(1, 0.38, 1.9)) ───────
 const CHASSIS_W = 1.0
 const CHASSIS_H = 0.38
@@ -134,9 +138,9 @@ export function createCarPhysics(world, groundMaterial) {
     } else if (keys.backward) {
       // Check current forward speed to decide brake vs reverse
       const chassisVel = chassisBody.velocity
-      const fwd = new CANNON.Vec3(0, 0, 1)
-      chassisBody.quaternion.vmult(fwd, fwd)
-      const forwardSpeed = chassisVel.dot(fwd)
+      _fwdVec.set(0, 0, 1)
+      chassisBody.quaternion.vmult(_fwdVec, _fwdVec)
+      const forwardSpeed = chassisVel.dot(_fwdVec)
 
       if (forwardSpeed > 0.5) {
         // Moving forward — brake
@@ -178,14 +182,14 @@ export function createCarPhysics(world, groundMaterial) {
 
     // Extract Y-axis heading from quaternion for dust / proximity
     // heading = atan2(2*(qw*qy + qx*qz), 1 - 2*(qy^2 + qz^2))  — but we use Three.js Euler
-    const euler = new THREE.Euler().setFromQuaternion(carState.quaternion, 'YXZ')
-    carState.rotation = euler.y
+    _euler.setFromQuaternion(carState.quaternion, 'YXZ')
+    carState.rotation = _euler.y
 
     // Forward speed — dot(velocity, local forward)
     const vel = chassisBody.velocity
-    const fwd = new CANNON.Vec3(0, 0, 1)
-    chassisBody.quaternion.vmult(fwd, fwd)
-    carState.velocity = vel.x * fwd.x + vel.y * fwd.y + vel.z * fwd.z
+    _fwdVec.set(0, 0, 1)
+    chassisBody.quaternion.vmult(_fwdVec, _fwdVec)
+    carState.velocity = vel.x * _fwdVec.x + vel.y * _fwdVec.y + vel.z * _fwdVec.z
 
     carState.speed = Math.abs(carState.velocity)
     carState.steer = currentSteer
