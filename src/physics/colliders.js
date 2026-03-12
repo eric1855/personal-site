@@ -1,65 +1,76 @@
 /**
  * Rapier-based collider world.
  *
- * Creates static Rapier rigid-bodies + colliders for buildings (cuboids) and trees (cylinders).
- * Also creates the car kinematic body + cuboid collider.
+ * Creates rigid-bodies + colliders for:
+ *   - Car (Dynamic body — velocity set from kinematic math each frame)
+ *   - Buildings (Fixed cuboids)
+ *   - Trees (Dynamic bodies — can be knocked over)
+ *   - Ground plane (Fixed cuboid)
+ *   - World boundary walls (Fixed cuboids)
  *
- * IMPORTANT: All colliders share the same Y center and half-height so Rapier always
- * produces XZ contact normals (never vertical). This is effectively 2D collision
- * on a flat plane — the car never leaves the ground.
- *
- * The car collider half-extents in XZ match the body mesh: BoxGeometry(1, 0.38, 1.9)
- *   → half-extents X=0.5, Z=0.95
+ * The car is now a Dynamic body so Rapier's solver handles pushing objects.
+ * Velocity is set directly each frame from the kinematic math (hybrid approach).
  */
 
 import { GROUND_Y } from './carPhysics.js'
 
-// Shared Y parameters — everything at the same height so contacts are XZ only.
-// COLLIDER_HY is deliberately large so Y overlap always exceeds any XZ overlap,
-// ensuring Rapier's SAT always produces XZ normals (never vertical push).
-const COLLIDER_Y = GROUND_Y   // center Y for all colliders
-const COLLIDER_HY = 50        // large half-height → Y is never the min-penetration axis
-
-// Car half-extents (XZ only — HY is shared)
+// Car half-extents matching visual mesh: BoxGeometry(1, 0.38, 1.9)
 const CAR_HX = 0.5
+const CAR_HY = 0.19
 const CAR_HZ = 0.95
 
 // World boundary (invisible walls)
 const WORLD_BOUND = 140
 const WALL_THICKNESS = 2
+const WALL_HEIGHT = 10
 
 export function createColliderWorld(RAPIER, world) {
-  // ── Car — KinematicPositionBased ─────────────────────────────
-  const carBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
-    .setTranslation(0, COLLIDER_Y, 0)
+  // ── Ground — Fixed flat cuboid ──────────────────────────────────
+  const groundDesc = RAPIER.RigidBodyDesc.fixed()
+    .setTranslation(0, -0.5, 0)
+  const groundBody = world.createRigidBody(groundDesc)
+  const groundColDesc = RAPIER.ColliderDesc.cuboid(200, 0.5, 200)
+    .setFriction(0.5)
+    .setRestitution(0.0)
+  world.createCollider(groundColDesc, groundBody)
+
+  // ── Car — Dynamic body (velocity driven from kinematic math) ────
+  const carBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(0, GROUND_Y, 0)
+    .setLinearDamping(0.0)
+    .setAngularDamping(0.0)
+    // Lock all rotations — car heading is set via kinematic math
+    .lockRotations()
   const carBody = world.createRigidBody(carBodyDesc)
 
-  const carColliderDesc = RAPIER.ColliderDesc.cuboid(CAR_HX, COLLIDER_HY, CAR_HZ)
-  carColliderDesc.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS)
-  // By default Rapier skips kinematic-vs-fixed contacts — enable them explicitly
-  carColliderDesc.setActiveCollisionTypes(
-    RAPIER.ActiveCollisionTypes.DEFAULT | RAPIER.ActiveCollisionTypes.KINEMATIC_FIXED
-  )
+  // Set car mass via density. Cuboid volume = 2*hx * 2*hy * 2*hz
+  // We want ~15 mass. density = mass / volume = 15 / (1 * 0.38 * 1.9) ~ 20.8
+  const carColliderDesc = RAPIER.ColliderDesc.cuboid(CAR_HX, CAR_HY, CAR_HZ)
+    .setDensity(20.0)
+    .setFriction(0.3)
+    .setRestitution(0.0)
+    .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS)
   const carCollider = world.createCollider(carColliderDesc, carBody)
 
   // ── Buildings — Fixed (static) cuboids ───────────────────────
-  // Half-extents in XZ match the visual mesh; HY is shared
   const buildings = [
-    { cx: 0,   cz: -20, hw: 4.0 / 2, hd: 3.0 / 2 },  // about
-    { cx: 20,  cz: 0,   hw: 5.5 / 2, hd: 3.5 / 2 },  // projects
-    { cx: 0,   cz: 20,  hw: 4.0 / 2, hd: 3.5 / 2 },  // contact
-    { cx: -20, cz: 0,   hw: 3.5 / 2, hd: 3.0 / 2 },  // blog
+    { cx: 0,   cz: -20, hw: 4.0 / 2, hh: 5.0 / 2, hd: 3.0 / 2 },  // about
+    { cx: 20,  cz: 0,   hw: 5.5 / 2, hh: 3.5 / 2, hd: 3.5 / 2 },  // projects
+    { cx: 0,   cz: 20,  hw: 4.0 / 2, hh: 4.0 / 2, hd: 3.5 / 2 },  // contact
+    { cx: -20, cz: 0,   hw: 3.5 / 2, hh: 6.0 / 2, hd: 3.0 / 2 },  // blog
   ]
 
   for (const b of buildings) {
     const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-      .setTranslation(b.cx, COLLIDER_Y, b.cz)
+      .setTranslation(b.cx, b.hh, b.cz)
     const body = world.createRigidBody(bodyDesc)
-    const colDesc = RAPIER.ColliderDesc.cuboid(b.hw, COLLIDER_HY, b.hd)
+    const colDesc = RAPIER.ColliderDesc.cuboid(b.hw, b.hh, b.hd)
+      .setFriction(0.8)
+      .setRestitution(0.0)
     world.createCollider(colDesc, body)
   }
 
-  // ── Trees — Fixed cylinders ──────────────────────────────────
+  // ── Trees — Dynamic bodies (can be knocked over) ──────────────
   const treePositions = [
     [-15, -20], [20, -15], [-25, 10], [18, 25],
     [-10, 30],  [30, 5],  [-35, -5], [12, -30],
@@ -70,37 +81,51 @@ export function createColliderWorld(RAPIER, world) {
     [-22, -52], [44, 28], [-38, -30], [10, -48],
   ]
 
-  for (const [x, z] of treePositions) {
-    const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-      .setTranslation(x, COLLIDER_Y, z)
+  const treeBodies = []
+
+  for (let i = 0; i < treePositions.length; i++) {
+    const [x, z] = treePositions[i]
+    const scale = 0.8 + Math.sin(i * 7.3) * 0.4
+
+    // Tree trunk + foliage approximated as a cylinder
+    // Trunk height ~1.6*scale, foliage adds more. Total ~4*scale
+    const totalHeight = 4.0 * scale
+    const halfH = totalHeight / 2
+    const radius = 0.5 * scale
+
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(x, halfH, z)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
     const body = world.createRigidBody(bodyDesc)
-    // Cylinder: half-height matches shared value, radius 0.5 for trunk
-    const colDesc = RAPIER.ColliderDesc.cylinder(COLLIDER_HY, 0.5)
+
+    const colDesc = RAPIER.ColliderDesc.cylinder(halfH, radius)
+      .setDensity(2.5)  // gives reasonable mass ~8 for average tree
+      .setFriction(0.5)
+      .setRestitution(0.1)
     world.createCollider(colDesc, body)
+
+    treeBodies.push({ body, scale })
   }
 
   // ── World boundary walls ─────────────────────────────────────
   const wallDefs = [
-    // +X wall
     { x: WORLD_BOUND + WALL_THICKNESS, z: 0,
       hx: WALL_THICKNESS, hz: WORLD_BOUND + WALL_THICKNESS * 2 },
-    // -X wall
     { x: -(WORLD_BOUND + WALL_THICKNESS), z: 0,
       hx: WALL_THICKNESS, hz: WORLD_BOUND + WALL_THICKNESS * 2 },
-    // +Z wall
     { x: 0, z: WORLD_BOUND + WALL_THICKNESS,
       hx: WORLD_BOUND + WALL_THICKNESS * 2, hz: WALL_THICKNESS },
-    // -Z wall
     { x: 0, z: -(WORLD_BOUND + WALL_THICKNESS),
       hx: WORLD_BOUND + WALL_THICKNESS * 2, hz: WALL_THICKNESS },
   ]
   for (const w of wallDefs) {
     const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-      .setTranslation(w.x, COLLIDER_Y, w.z)
+      .setTranslation(w.x, WALL_HEIGHT / 2, w.z)
     const body = world.createRigidBody(bodyDesc)
-    const colDesc = RAPIER.ColliderDesc.cuboid(w.hx, COLLIDER_HY, w.hz)
+    const colDesc = RAPIER.ColliderDesc.cuboid(w.hx, WALL_HEIGHT / 2, w.hz)
     world.createCollider(colDesc, body)
   }
 
-  return { carBody, carCollider }
+  return { carBody, carCollider, treeBodies }
 }
