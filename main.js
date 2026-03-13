@@ -22,6 +22,8 @@ import { createUI }             from './src/ui/ui.js'
 import { createPopup }          from './src/ui/popup.js'
 
 // ── Boot — Rapier WASM must be initialised before anything else ───
+const MIN_DISPLAY_MS = 3000
+const bootStart = performance.now()
 const { RAPIER, world } = await createPhysicsEngine()
 
 // ── Rendering ───────────────────────────────────────────────────
@@ -121,7 +123,25 @@ function loop(now) {
   renderer.render(scene, camera)
 }
 
-loop(performance.now())
+// ── Dismiss loading screen after minimum display time, then start loop ──
+const _bootElapsed = performance.now() - bootStart
+const _remaining = Math.max(0, MIN_DISPLAY_MS - _bootElapsed)
+
+setTimeout(() => {
+  const ls = document.getElementById('loading-screen')
+  ls.classList.add('fade-out')
+  let started = false
+  const start = () => {
+    if (started) return
+    started = true
+    ls.remove()
+    loop(performance.now())
+  }
+  ls.addEventListener('transitionend', (e) => {
+    if (e.propertyName === 'opacity') start()
+  }, { once: true })
+  setTimeout(start, 1000) // safety fallback
+}, _remaining)
 
 // ── Helpers ─────────────────────────────────────────────────────
 
