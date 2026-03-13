@@ -28,7 +28,7 @@ src/physics/
   engine.js               Rapier WASM init + world creation (gravity: {0, -20, 0})
   carPhysics.js           kinematic car math (stepCar) + Rapier sync helpers (syncToRapier, readFromRapier)
   colliders.js            Rapier collider world — car (dynamic body), buildings (fixed cuboids), trees (dynamic cylinders), ground (fixed cuboid), boundary walls
-  collision.js            placeholder (manual collision resolution removed — Rapier solver handles it)
+  (collision.js removed — Rapier solver handles all collision response)
 src/ui/
   ui.js                   proximity HUD prompt
   popup.js                location content popup

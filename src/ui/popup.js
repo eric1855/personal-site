@@ -133,7 +133,9 @@ export function createPopup(onClose) {
   function open(location) {
     accent.style.background = location.color
     title.textContent = location.label
-    body.innerHTML = location.content
+    body.textContent = ''
+    const frag = document.createRange().createContextualFragment(location.content)
+    body.appendChild(frag)
     body.scrollTop = 0
     overlay.style.opacity = '1'
     overlay.style.pointerEvents = 'auto'
