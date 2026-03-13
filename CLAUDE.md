@@ -2,7 +2,7 @@
 
 ## Project Goal
 Interactive 3D personal website inspired by bruno-simon.com.
-User drives a low-poly car around a world. Buildings represent portfolio sections (About, Projects, Blog, Contact).
+User drives a low-poly car around a world. Buildings represent portfolio sections (About, Projects, Experience, Contact).
 Drive near a building and press E to open it as a popup.
 Interactive pushable objects (dominos, boxes, bouncy spheres) and knockable trees add physics playground feel.
 
@@ -61,6 +61,14 @@ src/ui/
 - **14 colored boxes** — 0.8 cubes, ~3 mass, stacked in 3-2-1 pyramid near About building (x:5, z:-16)
 - **8 bouncy spheres** — radius 0.45, ~2 mass, high restitution (0.6), scattered near Contact building (x:-5, z:16)
 - All objects are Rapier dynamic bodies synced to Three.js meshes each frame
+
+## Loading Screen
+- Pure CSS animated loading screen in `index.html` (no JS dependency for visuals)
+- CSS car silhouette drives across a road line, dust trail, spinning wheels
+- Text reveals in 3 phases: name (0.3s) → subtitle (1.0s) → WASD/E controls (1.8s)
+- Minimum display time: `MIN_DISPLAY_MS = 3000` (constant in `main.js`)
+- Game loop starts only AFTER loading screen fades out (no wasted GPU frames)
+- All CSS classes prefixed `ls-` to avoid collisions
 
 ## Game Loop
 Fixed-timestep accumulator at 60 Hz decoupled from display framerate:
