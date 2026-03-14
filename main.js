@@ -1,12 +1,8 @@
 /**
- * Main game loop — Rapier hybrid physics with interactive world objects.
+ * Main game loop — Rapier hybrid physics with themed worlds.
  *
- * Fixed-timestep accumulator at 60 Hz. Each tick:
- *   1. Process car input (kinematic math computes desired velocity)
- *   2. Sync car velocity to Rapier dynamic body
- *   3. Step the Rapier world (resolves all collisions dynamically)
- *   4. Read car position back from Rapier (captures push-out)
- *   5. Sync all Three.js meshes from Rapier bodies
+ * World selection via URL: ?world=city|carnival|beach|forest|construction|japanese|space|farm|playground|racing
+ * Each world creates ground, vegetation, decorations, interactive objects, and boundary walls.
  */
 import { createRenderer }      from './src/core/renderer.js'
 import { createScene }          from './src/core/scene.js'
@@ -15,9 +11,7 @@ import { createInput }          from './src/core/input.js'
 import { createPhysicsEngine }  from './src/physics/engine.js'
 import { createColliderWorld }  from './src/physics/colliders.js'
 import { createCar }            from './src/entities/car.js'
-import { createWorldObjects }   from './src/entities/worldObjects.js'
 import { createLocations }      from './src/entities/locations.js'
-import { createInteractables }  from './src/entities/interactables.js'
 import { createUI }             from './src/ui/ui.js'
 import { createPopup }          from './src/ui/popup.js'
 
@@ -34,26 +28,20 @@ const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window
 // ── Input ───────────────────────────────────────────────────────
 const { keys } = createInput()
 
-// ── World (visual meshes) ───────────────────────────────────────
-const { treeMeshes } = createWorldObjects(scene)
+// ── Portfolio buildings (constant across all worlds) ─────────────
 const { locations }  = createLocations(scene)
 
-// ── Rapier colliders (buildings, trees, boundary walls, ground) + car body ───
-const { carBody, carCollider, treeBodies } = createColliderWorld(RAPIER, world)
-
-// ── Wire tree meshes to their Rapier bodies for sync ────────────
-const treeSyncList = treeMeshes.map((tm, i) => ({
-  mesh: tm.mesh,
-  body: treeBodies[i].body,
-  scale: tm.scale,
-}))
+// ── Car + building colliders ────────────────────────────────────
+const { carBody, carCollider } = createColliderWorld(RAPIER, world)
 
 // ── Car (hybrid kinematic + dynamic Rapier) ─────────────────────
 const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } =
   createCar(scene, { RAPIER, world, carBody, carCollider })
 
-// ── Interactive objects (dominos, boxes, spheres) ────────────────
-const { syncList: interactSyncList } = createInteractables(scene, RAPIER, world)
+// ── Load selected world ─────────────────────────────────────────
+const worldId = new URLSearchParams(window.location.search).get('world') || 'city'
+const worldModule = await import(`./src/worlds/${worldId}.js`)
+const { syncList: worldSyncList, update: updateWorld } = worldModule.createWorld(scene, RAPIER, world)
 
 // ── HUD + popup ─────────────────────────────────────────────────
 const { updateProximityPrompt } = createUI()
@@ -80,25 +68,22 @@ let accumulator = 0
 function loop(now) {
   requestAnimationFrame(loop)
 
-  const elapsed = Math.min((now - prevTime) / 1000, 0.05) // cap at 50 ms (tab-blur recovery)
+  const elapsed = Math.min((now - prevTime) / 1000, 0.05)
   prevTime      = now
   accumulator  += elapsed
 
   while (accumulator >= FIXED_DT) {
     if (!isPaused) {
-      // 1. Kinematic math + sync velocity to Rapier body
       carPreStep(keys)
-
-      // 2. Step the Rapier physics world (collision solver runs here)
       world.step()
+      updateWorld(FIXED_DT)
     }
     accumulator -= FIXED_DT
   }
 
-  // 3. Sync all meshes from Rapier bodies
+  // Sync all meshes from Rapier bodies
   carPostStep()
-  _syncDynamicBodies(treeSyncList)
-  _syncDynamicBodies(interactSyncList)
+  _syncDynamicBodies(worldSyncList)
 
   // Camera shake on collision
   const impactSpeed = consumeCollision()
@@ -108,7 +93,7 @@ function loop(now) {
     shakeCamera(intensity)
   }
 
-  // ── Proximity / interaction ─────────────────────────────────
+  // Proximity / interaction
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
 
@@ -140,29 +125,22 @@ setTimeout(() => {
   ls.addEventListener('transitionend', (e) => {
     if (e.propertyName === 'opacity') start()
   }, { once: true })
-  setTimeout(start, 1000) // safety fallback
+  setTimeout(start, 1000)
 }, _remaining)
 
 // ── Helpers ─────────────────────────────────────────────────────
 
 function _syncDynamicBodies(syncList) {
   for (const item of syncList) {
-    const { mesh, body, scale } = item
+    const { mesh, body, offset } = item
     const pos = body.translation()
     const rot = body.rotation()
-
-    if (scale) {
-      // Trees: the Rapier body center is at the middle of the tree.
-      // The Three.js mesh group has its origin at ground level (y=0) and is scaled.
-      // We need to offset: mesh.y = body.y - halfHeight
-      // halfHeight = 4.0 * scale / 2 = 2.0 * scale
-      const halfH = 2.0 * scale
-      mesh.position.set(pos.x, pos.y - halfH, pos.z)
-      mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w)
+    if (offset) {
+      mesh.position.set(pos.x + offset.x, pos.y + offset.y, pos.z + offset.z)
     } else {
       mesh.position.set(pos.x, pos.y, pos.z)
-      mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w)
     }
+    mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w)
   }
 }
 

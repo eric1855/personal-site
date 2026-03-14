@@ -1,0 +1,1980 @@
+/**
+ * Space Colony World — alien planet base with rockets, satellite dishes,
+ * glowing alien flora, craters, astronauts, and sci-fi technology.
+ *
+ * Full 120×120 map (±60). Dark atmosphere with dramatic emissive contrast.
+ * Portfolio buildings at (0,-20), (20,0), (0,20), (-20,0).
+ *
+ * Animated: satellite dishes (rotation), alien plants (glow pulse),
+ * warning lights (pulse), geysers (mist glow), crystal shimmer.
+ */
+import * as THREE from 'three'
+
+// ── Reusable temp objects ──────────────────────────────────────────────
+const _q = new THREE.Quaternion()
+const _e = new THREE.Euler()
+
+// ── Palette ────────────────────────────────────────────────────────────
+function mat(color, opts = {}) {
+  return new THREE.MeshStandardMaterial({ color, flatShading: true, ...opts })
+}
+function emissiveMat(color, emissive, intensity = 1.0, opts = {}) {
+  return new THREE.MeshStandardMaterial({
+    color, emissive, emissiveIntensity: intensity, flatShading: true, ...opts,
+  })
+}
+function shadow(mesh) {
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  return mesh
+}
+
+const TERRAIN   = 0x2a2a3a
+const DARK_ROCK = 0x1e1e2e
+const CRATER    = 0x18182a
+const WHITE     = 0xffffff
+const SILVER    = 0xb0b0b0
+const STEEL     = 0x78909c
+const DARK_GRAY = 0x4a4a4a
+const BLACK     = 0x111111
+const RED       = 0xcc2222
+const ORANGE    = 0xff6600
+const YELLOW    = 0xffdd44
+const BLUE      = 0x1565c0
+const LIGHT_BLUE= 0x42a5f5
+const PANEL_BLUE= 0x0d47a1
+const CYAN_E    = 0x00ffff
+const PURPLE_E  = 0xaa44ff
+const PINK_E    = 0xff44cc
+const GREEN_E   = 0x00ff66
+const DOME_GREEN= 0x225533
+const METAL_DARK= 0x333344
+
+export function createWorld(scene, RAPIER, world) {
+  const syncList = []
+  const group = new THREE.Group()
+
+  // Animated references
+  const dishes = []
+  const alienPlants = []
+  const warningLights = []
+  const geysers = []
+  const crystals = []
+  let elapsed = 0
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SCENE SETUP — dark space background + fog
+  // ═══════════════════════════════════════════════════════════════════
+  scene.background = new THREE.Color(0x0a0a1a)
+  scene.fog = new THREE.Fog(0x0a0a1a, 40, 100)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // STARS — 300 tiny points in a large sphere
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const starCount = 300
+    const starGeo = new THREE.BufferGeometry()
+    const positions = new Float32Array(starCount * 3)
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * Math.PI * 2
+      const phi = Math.acos(2 * Math.random() - 1)
+      const r = 80 + Math.random() * 40
+      positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta)
+      positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) // keep above horizon
+      positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, sizeAttenuation: true })
+    const stars = new THREE.Points(starGeo, starMat)
+    group.add(stars)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // GROUND — dark alien terrain + Rapier collider
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const groundGeo = new THREE.PlaneGeometry(130, 130, 8, 8)
+    const groundMesh = new THREE.Mesh(groundGeo, mat(TERRAIN))
+    groundMesh.rotation.x = -Math.PI / 2
+    groundMesh.position.y = 0
+    groundMesh.receiveShadow = true
+    group.add(groundMesh)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.05, 0)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(65, 0.05, 65).setFriction(0.6), body
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BOUNDARY WALLS at ±60
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const wallH = 4
+    const wallThick = 0.5
+    const wallDefs = [
+      { tx: 0,   tz: -60, hx: 60, hz: wallThick },
+      { tx: 0,   tz: 60,  hx: 60, hz: wallThick },
+      { tx: -60, tz: 0,   hx: wallThick, hz: 60 },
+      { tx: 60,  tz: 0,   hx: wallThick, hz: 60 },
+    ]
+    for (const w of wallDefs) {
+      // Visual wall
+      const geo = new THREE.BoxGeometry(w.hx * 2, wallH, w.hz * 2)
+      const mesh = shadow(new THREE.Mesh(geo, mat(DARK_ROCK)))
+      mesh.position.set(w.tx, wallH / 2, w.tz)
+      group.add(mesh)
+      // Rapier
+      const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(w.tx, wallH / 2, w.tz)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(w.hx, wallH / 2, w.hz).setFriction(0.5), body
+      )
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // MAIN ROCKET — tallest structure (~15 units) on launch pad
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const rx = 30, rz = -30
+    const rocketGroup = new THREE.Group()
+    rocketGroup.position.set(rx, 0, rz)
+
+    // Launch pad platform
+    const padGeo = new THREE.CylinderGeometry(5, 5, 0.4, 10)
+    const pad = shadow(new THREE.Mesh(padGeo, mat(STEEL)))
+    pad.position.y = 0.2
+    rocketGroup.add(pad)
+
+    // Pad ring
+    const padRing = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(5.3, 5.3, 0.15, 10), mat(DARK_GRAY)
+    ))
+    padRing.position.y = 0.075
+    rocketGroup.add(padRing)
+
+    // Pad markings
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2
+      const markGeo = new THREE.PlaneGeometry(1.5, 0.15)
+      const mark = new THREE.Mesh(markGeo, mat(YELLOW))
+      mark.rotation.x = -Math.PI / 2
+      mark.rotation.z = angle
+      mark.position.set(Math.cos(angle) * 4, 0.41, Math.sin(angle) * 4)
+      rocketGroup.add(mark)
+    }
+
+    // Landing lights around pad
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2
+      const lg = new THREE.Mesh(
+        new THREE.CircleGeometry(0.2, 6),
+        emissiveMat(WHITE, WHITE, 1.5)
+      )
+      lg.rotation.x = -Math.PI / 2
+      lg.position.set(Math.cos(angle) * 5.5, 0.02, Math.sin(angle) * 5.5)
+      rocketGroup.add(lg)
+    }
+
+    // Engine nozzle
+    const nozzle = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(1.0, 1.5, 8), mat(0x333333)
+    ))
+    nozzle.position.y = 1.15
+    rocketGroup.add(nozzle)
+
+    // Inner nozzle glow
+    const nozzleGlow = new THREE.Mesh(
+      new THREE.ConeGeometry(0.6, 0.8, 8),
+      emissiveMat(ORANGE, ORANGE, 0.6)
+    )
+    nozzleGlow.position.y = 0.8
+    rocketGroup.add(nozzleGlow)
+
+    // Rocket body
+    const rBody = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 1.5, 11, 8), mat(WHITE)
+    ))
+    rBody.position.y = 7.4
+    rocketGroup.add(rBody)
+
+    // Blue stripe lower
+    const blueS1 = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(1.52, 1.52, 0.6, 8), mat(BLUE)
+    ))
+    blueS1.position.y = 3.8
+    rocketGroup.add(blueS1)
+
+    // Red stripe middle
+    const redS = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(1.3, 1.3, 0.5, 8), mat(RED)
+    ))
+    redS.position.y = 10.0
+    rocketGroup.add(redS)
+
+    // Blue stripe upper
+    const blueS2 = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(1.25, 1.25, 0.4, 8), mat(BLUE)
+    ))
+    blueS2.position.y = 7.5
+    rocketGroup.add(blueS2)
+
+    // Nose cone
+    const nose = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(1.2, 3.5, 8), mat(RED)
+    ))
+    nose.position.y = 14.65
+    rocketGroup.add(nose)
+
+    // Nose tip
+    const noseTip = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(0.18, 0.6, 6), mat(WHITE)
+    ))
+    noseTip.position.y = 16.2
+    rocketGroup.add(noseTip)
+
+    // Fins (4)
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2
+      const finGrp = new THREE.Group()
+      finGrp.rotation.y = angle
+      const fin = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 3.0, 1.5), mat(SILVER)
+      ))
+      fin.position.set(0, 2.5, 1.8)
+      fin.rotation.x = -0.15
+      finGrp.add(fin)
+      const finTip = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 0.7, 0.6), mat(RED)
+      ))
+      finTip.position.set(0, 3.8, 1.5)
+      finGrp.add(finTip)
+      rocketGroup.add(finGrp)
+    }
+
+    // Portholes
+    for (let i = 0; i < 4; i++) {
+      const port = new THREE.Mesh(
+        new THREE.CircleGeometry(0.18, 8),
+        emissiveMat(LIGHT_BLUE, CYAN_E, 0.6)
+      )
+      port.position.set(0, 8.0 + i * 1.4, 1.21)
+      rocketGroup.add(port)
+    }
+
+    group.add(rocketGroup)
+
+    // Rocket collider
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(rx, 8, rz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cylinder(8, 1.5).setFriction(0.5), body)
+
+    // Pad collider
+    const padBd = RAPIER.RigidBodyDesc.fixed().setTranslation(rx, 0.2, rz)
+    const padBody = world.createRigidBody(padBd)
+    world.createCollider(RAPIER.ColliderDesc.cylinder(0.2, 5).setFriction(0.6), padBody)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SMALLER ROCKET on second pad
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const rx = -35, rz = 25
+    const g = new THREE.Group()
+    g.position.set(rx, 0, rz)
+
+    // Pad
+    const pad = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(3.5, 3.5, 0.3, 8), mat(STEEL)
+    ))
+    pad.position.y = 0.15
+    g.add(pad)
+
+    // Body
+    const b = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.7, 0.9, 7, 8), mat(SILVER)
+    ))
+    b.position.y = 4.2
+    g.add(b)
+
+    // Stripe
+    const stripe = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.92, 0.92, 0.4, 8), mat(ORANGE)
+    ))
+    stripe.position.y = 3.0
+    g.add(stripe)
+
+    // Nose
+    const nose = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(0.7, 2.0, 8), mat(ORANGE)
+    ))
+    nose.position.y = 8.7
+    g.add(nose)
+
+    // Fins (3)
+    for (let i = 0; i < 3; i++) {
+      const angle = (i / 3) * Math.PI * 2
+      const finGrp = new THREE.Group()
+      finGrp.rotation.y = angle
+      const fin = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 2.0, 1.0), mat(STEEL)
+      ))
+      fin.position.set(0, 1.5, 1.1)
+      finGrp.add(fin)
+      g.add(finGrp)
+    }
+
+    group.add(g)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(rx, 4, rz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cylinder(4, 1.0).setFriction(0.5), body)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ROCKET UNDER CONSTRUCTION (no nose cone, scaffolding)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const rx = 40, rz = 20
+    const g = new THREE.Group()
+    g.position.set(rx, 0, rz)
+
+    // Pad
+    const pad = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(4, 4, 0.3, 8), mat(STEEL)
+    ))
+    pad.position.y = 0.15
+    g.add(pad)
+
+    // Partial body (no nose)
+    const b = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(1.0, 1.2, 8, 8), mat(WHITE)
+    ))
+    b.position.y = 4.5
+    g.add(b)
+
+    // Open top ring
+    const topRing = shadow(new THREE.Mesh(
+      new THREE.TorusGeometry(1.0, 0.08, 6, 12), mat(STEEL)
+    ))
+    topRing.position.y = 8.5
+    topRing.rotation.x = Math.PI / 2
+    g.add(topRing)
+
+    // Scaffolding (4 vertical + horizontal beams)
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2
+      const sx = Math.cos(angle) * 2.2
+      const sz = Math.sin(angle) * 2.2
+      // Vertical beam
+      const vb = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.15, 10, 0.15), mat(YELLOW)
+      ))
+      vb.position.set(sx, 5, sz)
+      g.add(vb)
+      // Horizontal braces
+      for (let h = 0; h < 4; h++) {
+        const hb = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.1, 0.1, 1.2), mat(YELLOW)
+        ))
+        hb.position.set(sx * 0.6, 2 + h * 2.5, sz * 0.6)
+        hb.lookAt(new THREE.Vector3(0, 2 + h * 2.5, 0).add(g.position))
+        hb.position.sub(g.position) // undo the group offset
+        g.add(hb)
+      }
+    }
+
+    // Cross braces at each level
+    for (let h = 0; h < 4; h++) {
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2
+        const nextAngle = ((i + 1) / 4) * Math.PI * 2
+        const midAngle = (angle + nextAngle) / 2
+        const cb = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 0.08, 3.2), mat(YELLOW)
+        ))
+        cb.position.set(Math.cos(midAngle) * 2.2, 2 + h * 2.5, Math.sin(midAngle) * 2.2)
+        cb.rotation.y = -midAngle + Math.PI / 2
+        g.add(cb)
+      }
+    }
+
+    group.add(g)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(rx, 4.5, rz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cylinder(4.5, 2.5).setFriction(0.5), body)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SATELLITE DISHES (5, animated rotation)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const dishDefs = [
+      { x: -30, z: -35, speed: 0.15 },
+      { x: -28, z: -30, speed: 0.22 },
+      { x: 45,  z: -10, speed: 0.18 },
+      { x: 42,  z: -15, speed: 0.12 },
+      { x: -15, z: 45,  speed: 0.25 },
+    ]
+    for (const d of dishDefs) {
+      const dg = new THREE.Group()
+      dg.position.set(d.x, 0, d.z)
+
+      // Pedestal
+      const pedestal = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.4, 0.6, 1.8, 6), mat(STEEL)
+      ))
+      pedestal.position.y = 0.9
+      dg.add(pedestal)
+
+      // Support arm
+      const support = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.15, 2.2, 6), mat(SILVER)
+      ))
+      support.position.y = 2.5
+      support.rotation.x = 0.3
+      dg.add(support)
+
+      // Dish (inverted cone)
+      const dish = shadow(new THREE.Mesh(
+        new THREE.ConeGeometry(3.0, 1.4, 8), mat(WHITE)
+      ))
+      dish.position.y = 3.6
+      dish.rotation.x = Math.PI
+      dg.add(dish)
+
+      // Inner dish
+      const inner = shadow(new THREE.Mesh(
+        new THREE.ConeGeometry(2.7, 1.0, 8), mat(SILVER)
+      ))
+      inner.position.y = 3.4
+      inner.rotation.x = Math.PI
+      dg.add(inner)
+
+      // Feed horn
+      const horn = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 1.8, 6), mat(DARK_GRAY)
+      ))
+      horn.position.y = 3.9
+      dg.add(horn)
+
+      // Feed tip
+      const tip = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 6, 6), mat(RED)
+      ))
+      tip.position.y = 4.9
+      dg.add(tip)
+
+      group.add(dg)
+      dishes.push({ group: dg, speed: d.speed })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BASE BUILDINGS — futuristic shapes with colliders
+  // ═══════════════════════════════════════════════════════════════════
+
+  // — Domed Habitats (3) —
+  {
+    const habDefs = [
+      { x: -40, z: -10, r: 3.5, h: 2.0 },
+      { x: 35,  z: 40,  r: 3.0, h: 1.8 },
+      { x: -20, z: -40, r: 2.8, h: 1.6 },
+    ]
+    for (const hb of habDefs) {
+      // Cylinder base
+      const base = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(hb.r, hb.r, hb.h, 10), mat(STEEL)
+      ))
+      base.position.set(hb.x, hb.h / 2, hb.z)
+      group.add(base)
+      // Hemisphere dome
+      const dome = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(hb.r, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(SILVER)
+      ))
+      dome.position.set(hb.x, hb.h, hb.z)
+      group.add(dome)
+      // Door
+      const door = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 1.5, 0.1), mat(DARK_GRAY)
+      ))
+      door.position.set(hb.x, 0.75, hb.z + hb.r)
+      group.add(door)
+      // Collider
+      const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(hb.x, hb.h / 2 + hb.r * 0.3, hb.z)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cylinder(hb.h / 2 + hb.r * 0.3, hb.r).setFriction(0.5), body
+      )
+    }
+  }
+
+  // — Rectangular Modules (2) with antenna arrays —
+  {
+    const modDefs = [
+      { x: 15, z: 35, w: 6, h: 3.5, d: 4 },
+      { x: -45, z: 15, w: 5, h: 3, d: 3.5 },
+    ]
+    for (const m of modDefs) {
+      const box = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(m.w, m.h, m.d), mat(STEEL)
+      ))
+      box.position.set(m.x, m.h / 2, m.z)
+      group.add(box)
+      // Antenna array on roof
+      for (let a = 0; a < 4; a++) {
+        const ant = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.03, 0.03, 2.5, 4), mat(SILVER)
+        ))
+        ant.position.set(m.x - 1.5 + a * 1.0, m.h + 1.25, m.z)
+        group.add(ant)
+      }
+      // Cross elements
+      const cross = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(4.0, 0.05, 0.05), mat(SILVER)
+      ))
+      cross.position.set(m.x, m.h + 2.0, m.z)
+      group.add(cross)
+
+      const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(m.x, m.h / 2, m.z)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(m.w / 2, m.h / 2, m.d / 2).setFriction(0.5), body
+      )
+    }
+  }
+
+  // — Control Tower —
+  {
+    const tx = -35, tz = -45
+    const tg = new THREE.Group()
+    tg.position.set(tx, 0, tz)
+
+    // Base floor
+    const b1 = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(5, 3, 4), mat(STEEL)
+    ))
+    b1.position.y = 1.5
+    tg.add(b1)
+
+    // Middle floor
+    const b2 = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(4.5, 3, 3.5), mat(DARK_GRAY)
+    ))
+    b2.position.y = 4.5
+    tg.add(b2)
+
+    // Top observation deck (blue transparent windows)
+    const top = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(5.5, 2.5, 4.5), mat(BLUE, { transparent: true, opacity: 0.7 })
+    ))
+    top.position.y = 7.25
+    tg.add(top)
+
+    // Window dividers
+    for (let v = -1; v <= 1; v++) {
+      const div = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 2.5, 0.08), mat(SILVER)
+      ))
+      div.position.set(v * 1.5, 7.25, 2.26)
+      tg.add(div)
+    }
+
+    // Roof
+    const roof = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(6, 0.2, 5), mat(DARK_GRAY)
+    ))
+    roof.position.y = 8.6
+    tg.add(roof)
+
+    // Radar dome
+    const radar = shadow(new THREE.Mesh(
+      new THREE.SphereGeometry(1.0, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(WHITE)
+    ))
+    radar.position.set(-1.5, 8.7, 0)
+    tg.add(radar)
+
+    // Warning light
+    const wl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 6, 6),
+      emissiveMat(RED, RED, 2.0)
+    )
+    wl.position.set(2.0, 8.9, 0)
+    tg.add(wl)
+    warningLights.push(wl)
+
+    group.add(tg)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(tx, 4.5, tz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(3.0, 4.5, 2.5).setFriction(0.5), body
+    )
+  }
+
+  // — Communications Array —
+  {
+    const cx = 50, cz = -40
+    // Tall cylinder
+    const mast = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.7, 8, 6), mat(STEEL)
+    ))
+    mast.position.set(cx, 4, cz)
+    group.add(mast)
+
+    // Cross elements at top
+    for (let i = 0; i < 3; i++) {
+      const cross = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(4, 0.08, 0.08), mat(SILVER)
+      ))
+      cross.position.set(cx, 7 + i * 0.6, cz)
+      group.add(cross)
+      const crossZ = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.08, 4), mat(SILVER)
+      ))
+      crossZ.position.set(cx, 7 + i * 0.6, cz)
+      group.add(crossZ)
+    }
+
+    // Warning light
+    const wl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 6, 6),
+      emissiveMat(RED, RED, 2.0)
+    )
+    wl.position.set(cx, 9, cz)
+    group.add(wl)
+    warningLights.push(wl)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(cx, 4, cz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cylinder(4, 0.7).setFriction(0.5), body)
+  }
+
+  // — Power Station —
+  {
+    const px = -50, pz = -20
+    const ps = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(5, 3, 4), mat(DARK_GRAY)
+    ))
+    ps.position.set(px, 1.5, pz)
+    group.add(ps)
+
+    // Glowing panels on sides
+    for (let s = -1; s <= 1; s += 2) {
+      const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, 2.0, 3.0),
+        emissiveMat(CYAN_E, CYAN_E, 1.2)
+      )
+      panel.position.set(px + s * 2.55, 1.5, pz)
+      group.add(panel)
+    }
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(px, 1.5, pz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cuboid(2.5, 1.5, 2).setFriction(0.5), body)
+  }
+
+  // — Greenhouse Dome (semi-transparent green) —
+  {
+    const gx = 25, gz = -45
+    // Base cylinder
+    const base = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(4, 4, 1.0, 10), mat(STEEL)
+    ))
+    base.position.set(gx, 0.5, gz)
+    group.add(base)
+
+    // Transparent green dome
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(4, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      mat(DOME_GREEN, { transparent: true, opacity: 0.4 })
+    )
+    dome.position.set(gx, 1.0, gz)
+    group.add(dome)
+
+    // Internal plant shapes (visible through dome)
+    for (let p = 0; p < 6; p++) {
+      const pa = (p / 6) * Math.PI * 2
+      const pr = 2.0 + Math.random()
+      const plant = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(0.5 + Math.random() * 0.3, 5, 4),
+        mat(0x33aa44)
+      ))
+      plant.position.set(
+        gx + Math.cos(pa) * pr,
+        1.2 + Math.random() * 0.5,
+        gz + Math.sin(pa) * pr
+      )
+      group.add(plant)
+    }
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(gx, 2, gz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cylinder(2, 4).setFriction(0.5), body)
+  }
+
+  // — Landing Bay (open-roof box) —
+  {
+    const lx = -10, lz = 45
+    const wallH = 3
+    // 3 walls (open on one side)
+    const wallDefs = [
+      { dx: 0, dz: -3, w: 8, d: 0.3 },  // back
+      { dx: -4, dz: 0, w: 0.3, d: 6 },   // left
+      { dx: 4, dz: 0, w: 0.3, d: 6 },    // right
+    ]
+    for (const wd of wallDefs) {
+      const wall = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(wd.w, wallH, wd.d), mat(STEEL)
+      ))
+      wall.position.set(lx + wd.dx, wallH / 2, lz + wd.dz)
+      group.add(wall)
+    }
+    // Floor
+    const floor = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(8, 0.2, 6), mat(DARK_GRAY)
+    ))
+    floor.position.set(lx, 0.1, lz)
+    group.add(floor)
+
+    // Colliders for walls
+    for (const wd of wallDefs) {
+      const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(lx + wd.dx, wallH / 2, lz + wd.dz)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(wd.w / 2, wallH / 2, wd.d / 2).setFriction(0.5), body
+      )
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VEHICLES
+  // ═══════════════════════════════════════════════════════════════════
+
+  // — Moon Rovers (2) —
+  {
+    const roverDefs = [
+      { x: 35, z: -5, rot: 0.3 },
+      { x: -25, z: 35, rot: -0.5 },
+    ]
+    for (const rv of roverDefs) {
+      const rg = new THREE.Group()
+      rg.position.set(rv.x, 0, rv.z)
+      rg.rotation.y = rv.rot
+
+      // Body
+      const body = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 0.8, 2.8), mat(SILVER)
+      ))
+      body.position.y = 0.9
+      rg.add(body)
+
+      // Upper instruments
+      const upper = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 0.4, 1.6), mat(STEEL)
+      ))
+      upper.position.set(0, 1.5, -0.3)
+      rg.add(upper)
+
+      // Thick wheels (4)
+      const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8)
+      const wheelMat = mat(DARK_GRAY)
+      const wpos = [[-1.0, 0.4, -1.0], [1.0, 0.4, -1.0], [-1.0, 0.4, 1.0], [1.0, 0.4, 1.0]]
+      for (const [wx, wy, wz] of wpos) {
+        const wheel = shadow(new THREE.Mesh(wheelGeo, wheelMat))
+        wheel.position.set(wx, wy, wz)
+        wheel.rotation.z = Math.PI / 2
+        rg.add(wheel)
+      }
+
+      // Antenna
+      const ant = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 2.0, 4), mat(STEEL)
+      ))
+      ant.position.set(-0.5, 2.3, -0.7)
+      rg.add(ant)
+
+      // Antenna dish
+      const adish = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(0.25, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2), mat(WHITE)
+      ))
+      adish.position.set(-0.5, 3.3, -0.7)
+      rg.add(adish)
+
+      // Solar panel
+      const sp = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(2.0, 0.05, 1.2), mat(PANEL_BLUE)
+      ))
+      sp.position.set(0, 1.9, 0.5)
+      rg.add(sp)
+
+      group.add(rg)
+
+      // Collider (account for rotation)
+      const halfA = rv.rot * 0.5
+      const bd = RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(rv.x, 0.9, rv.z)
+        .setRotation({ x: 0, y: Math.sin(halfA), z: 0, w: Math.cos(halfA) })
+      const b = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(1.0, 0.9, 1.5).setFriction(0.5), b
+      )
+    }
+  }
+
+  // — Hover Transport —
+  {
+    const hx = -40, hz = 40
+    // Platform body
+    const platform = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(4, 0.3, 3), mat(STEEL)
+    ))
+    platform.position.set(hx, 1.0, hz)
+    group.add(platform)
+
+    // Landing legs (4)
+    for (let lx = -1; lx <= 1; lx += 2) {
+      for (let lz = -1; lz <= 1; lz += 2) {
+        const leg = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.1, 0.15, 1.0, 6), mat(DARK_GRAY)
+        ))
+        leg.position.set(hx + lx * 1.5, 0.5, hz + lz * 1.0)
+        group.add(leg)
+        // Foot pad
+        const foot = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.25, 0.25, 0.08, 6), mat(STEEL)
+        ))
+        foot.position.set(hx + lx * 1.5, 0.04, hz + lz * 1.0)
+        group.add(foot)
+      }
+    }
+
+    // Engine glow under platform
+    const glow = new THREE.Mesh(
+      new THREE.CircleGeometry(1.0, 8),
+      emissiveMat(CYAN_E, CYAN_E, 0.6)
+    )
+    glow.rotation.x = -Math.PI / 2
+    glow.position.set(hx, 0.85, hz)
+    group.add(glow)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(hx, 1.0, hz)
+    const body = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cuboid(2, 0.5, 1.5).setFriction(0.5), body)
+  }
+
+  // — Mining Vehicle —
+  {
+    const mx = 50, mz = 30
+    const mg = new THREE.Group()
+    mg.position.set(mx, 0, mz)
+
+    // Body
+    const body = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2.5, 1.5, 3.5), mat(YELLOW)
+    ))
+    body.position.y = 1.0
+    mg.add(body)
+
+    // Cab
+    const cab = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2.0, 1.0, 1.5), mat(DARK_GRAY)
+    ))
+    cab.position.set(0, 2.0, -0.8)
+    mg.add(cab)
+
+    // Windshield
+    const ws = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.7, 0.05),
+      mat(LIGHT_BLUE, { transparent: true, opacity: 0.5 })
+    )
+    ws.position.set(0, 2.1, 0.0)
+    ws.rotation.x = 0.2
+    mg.add(ws)
+
+    // Drill arm
+    const drillBase = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.3, 1.0, 6), mat(STEEL)
+    ))
+    drillBase.position.set(0, 2.0, 1.5)
+    mg.add(drillBase)
+
+    const drillArm = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 3.0, 6), mat(STEEL)
+    ))
+    drillArm.position.set(0, 2.0, 3.2)
+    drillArm.rotation.x = Math.PI / 2
+    mg.add(drillArm)
+
+    // Drill bit
+    const drillBit = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(0.25, 0.8, 6), mat(SILVER)
+    ))
+    drillBit.position.set(0, 2.0, 4.7)
+    drillBit.rotation.x = Math.PI / 2
+    mg.add(drillBit)
+
+    // Tracks (2 boxes)
+    for (let s = -1; s <= 1; s += 2) {
+      const track = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.6, 3.8), mat(DARK_GRAY)
+      ))
+      track.position.set(s * 1.3, 0.3, 0)
+      mg.add(track)
+    }
+
+    group.add(mg)
+
+    const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(mx, 1.2, mz)
+    const b = world.createRigidBody(bd)
+    world.createCollider(RAPIER.ColliderDesc.cuboid(1.5, 1.5, 2.5).setFriction(0.5), b)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ALIEN FLORA — glowing plants (15-20)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const floraDefs = [
+      { x: 10,  z: 10,  h: 2.5, color: CYAN_E },
+      { x: -12, z: 12,  h: 3.0, color: PURPLE_E },
+      { x: 8,   z: -10, h: 2.0, color: PINK_E },
+      { x: -8,  z: -12, h: 2.8, color: GREEN_E },
+      { x: 25,  z: 15,  h: 3.2, color: CYAN_E },
+      { x: -25, z: -15, h: 2.4, color: PURPLE_E },
+      { x: 30,  z: 10,  h: 2.6, color: PINK_E },
+      { x: -30, z: 10,  h: 3.5, color: GREEN_E },
+      { x: 15,  z: -35, h: 2.2, color: CYAN_E },
+      { x: -15, z: 35,  h: 2.9, color: PURPLE_E },
+      { x: 40,  z: -45, h: 2.0, color: PINK_E },
+      { x: -45, z: -35, h: 3.0, color: GREEN_E },
+      { x: 50,  z: 10,  h: 2.7, color: CYAN_E },
+      { x: -50, z: 10,  h: 2.3, color: PURPLE_E },
+      { x: 35,  z: 50,  h: 3.1, color: PINK_E },
+      { x: -35, z: -50, h: 2.5, color: GREEN_E },
+      { x: 45,  z: 45,  h: 2.8, color: CYAN_E },
+      { x: -48, z: 45,  h: 3.3, color: PURPLE_E },
+    ]
+    for (const f of floraDefs) {
+      // Stalk
+      const stalk = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.1, f.h, 5), mat(0x224422)
+      ))
+      stalk.position.set(f.x, f.h / 2, f.z)
+      group.add(stalk)
+
+      // Bulbous tip (emissive sphere)
+      const tipMat = emissiveMat(f.color, f.color, 1.5)
+      const tip = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3 + Math.random() * 0.2, 7, 5), tipMat
+      )
+      tip.position.set(f.x, f.h + 0.15, f.z)
+      group.add(tip)
+
+      alienPlants.push({ mesh: tip, material: tipMat, baseIntensity: 1.5, phase: Math.random() * Math.PI * 2 })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CRYSTAL FORMATIONS (10)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const crystalDefs = [
+      { x: 5,   z: 30,  s: 1.2, color: 0x8844cc },
+      { x: -5,  z: -30, s: 1.0, color: 0x4466cc },
+      { x: 30,  z: 5,   s: 1.4, color: 0x8844cc },
+      { x: -30, z: -5,  s: 0.9, color: 0x4466cc },
+      { x: 40,  z: 40,  s: 1.1, color: 0x8844cc },
+      { x: -40, z: 40,  s: 1.3, color: 0x4466cc },
+      { x: 45,  z: -25, s: 1.0, color: 0x8844cc },
+      { x: -45, z: -25, s: 0.8, color: 0x4466cc },
+      { x: 10,  z: 50,  s: 1.2, color: 0x8844cc },
+      { x: -10, z: -50, s: 1.1, color: 0x4466cc },
+    ]
+    for (const c of crystalDefs) {
+      const crystalMat = emissiveMat(c.color, c.color, 0.8, { transparent: true, opacity: 0.7 })
+      // Main crystal (elongated dodecahedron)
+      const crystal = shadow(new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.6 * c.s, 0), crystalMat
+      ))
+      crystal.scale.set(0.5, 1.5, 0.5)
+      crystal.position.set(c.x, 1.0 * c.s, c.z)
+      crystal.rotation.set(Math.random() * 0.3, Math.random() * Math.PI, Math.random() * 0.3)
+      group.add(crystal)
+
+      // Smaller crystal beside
+      const crystal2 = shadow(new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.35 * c.s, 0), crystalMat
+      ))
+      crystal2.scale.set(0.4, 1.2, 0.4)
+      crystal2.position.set(c.x + 0.5, 0.6 * c.s, c.z + 0.4)
+      crystal2.rotation.set(0.2, Math.random() * Math.PI, -0.15)
+      group.add(crystal2)
+
+      crystals.push({ mesh: crystal, material: crystalMat, phase: Math.random() * Math.PI * 2 })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ALIEN MUSHROOM CLUSTERS (8)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const mushDefs = [
+      { x: 12,  z: 25,  color: 0x44ffaa },
+      { x: -12, z: -25, color: 0xff44aa },
+      { x: 35,  z: -15, color: 0x44aaff },
+      { x: -35, z: 20,  color: 0xaaff44 },
+      { x: 20,  z: -50, color: 0x44ffaa },
+      { x: -20, z: 50,  color: 0xff44aa },
+      { x: 50,  z: 0,   color: 0x44aaff },
+      { x: -50, z: 0,   color: 0xaaff44 },
+    ]
+    for (const m of mushDefs) {
+      // 2-3 mushrooms per cluster
+      const count = 2 + Math.floor(Math.random() * 2)
+      for (let i = 0; i < count; i++) {
+        const ox = (Math.random() - 0.5) * 1.5
+        const oz = (Math.random() - 0.5) * 1.5
+        const h = 0.6 + Math.random() * 1.0
+        const r = 0.3 + Math.random() * 0.3
+
+        // Stem
+        const stem = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.06, 0.1, h, 5), mat(0x888888)
+        ))
+        stem.position.set(m.x + ox, h / 2, m.z + oz)
+        group.add(stem)
+
+        // Cap (flat hemisphere)
+        const cap = shadow(new THREE.Mesh(
+          new THREE.SphereGeometry(r, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2.5),
+          emissiveMat(m.color, m.color, 0.8)
+        ))
+        cap.position.set(m.x + ox, h, m.z + oz)
+        group.add(cap)
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // GLOWING GROUND PATCHES (10)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const patchDefs = [
+      { x: 8,   z: 8,   r: 1.2, color: CYAN_E },
+      { x: -8,  z: -8,  r: 1.0, color: PURPLE_E },
+      { x: 25,  z: -20, r: 1.5, color: GREEN_E },
+      { x: -25, z: 20,  r: 1.3, color: PINK_E },
+      { x: 40,  z: 35,  r: 1.0, color: CYAN_E },
+      { x: -40, z: -35, r: 1.4, color: PURPLE_E },
+      { x: 15,  z: 45,  r: 1.1, color: GREEN_E },
+      { x: -15, z: -45, r: 0.9, color: PINK_E },
+      { x: 50,  z: -5,  r: 1.2, color: CYAN_E },
+      { x: -50, z: 5,   r: 1.0, color: PURPLE_E },
+    ]
+    for (const p of patchDefs) {
+      const patch = new THREE.Mesh(
+        new THREE.CircleGeometry(p.r, 10),
+        emissiveMat(p.color, p.color, 0.4, { transparent: true, opacity: 0.3 })
+      )
+      patch.rotation.x = -Math.PI / 2
+      patch.position.set(p.x, 0.02, p.z)
+      group.add(patch)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CRATERS (10)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const craterDefs = [
+      { x: -15, z: -10, r: 3.0 },
+      { x: 20,  z: 25,  r: 2.5 },
+      { x: -30, z: 30,  r: 4.0 },
+      { x: 35,  z: -20, r: 2.8 },
+      { x: -50, z: -45, r: 3.5 },
+      { x: 50,  z: 45,  r: 2.2 },
+      { x: 10,  z: -45, r: 3.0 },
+      { x: -45, z: 50,  r: 2.6 },
+      { x: 55,  z: 15,  r: 2.0 },
+      { x: -55, z: -15, r: 3.2 },
+    ]
+    for (const c of craterDefs) {
+      // Dark center
+      const center = new THREE.Mesh(
+        new THREE.CircleGeometry(c.r * 0.7, 10),
+        mat(CRATER)
+      )
+      center.rotation.x = -Math.PI / 2
+      center.position.set(c.x, 0.015, c.z)
+      group.add(center)
+
+      // Raised rim (low torus)
+      const rim = shadow(new THREE.Mesh(
+        new THREE.TorusGeometry(c.r, 0.15, 5, 12),
+        mat(DARK_ROCK)
+      ))
+      rim.rotation.x = Math.PI / 2
+      rim.position.set(c.x, 0.08, c.z)
+      group.add(rim)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ROCKY TERRAIN — scattered rocks (20+)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const rockPositions = [
+      [-8, -35], [12, -40], [-18, 28], [28, -12], [-38, -22],
+      [42, 25], [-42, 32], [20, 48], [-20, -48], [48, -35],
+      [-48, 38], [5, 40], [-5, -38], [38, 8], [-38, -8],
+      [55, -50], [-55, 50], [25, 55], [-25, -55], [0, 55],
+      [0, -55], [55, 0], [-55, 0],
+    ]
+    const rockGeo = new THREE.DodecahedronGeometry(0.5, 0)
+    for (const [rx, rz] of rockPositions) {
+      const scale = 0.5 + Math.random() * 1.5
+      const rock = shadow(new THREE.Mesh(rockGeo, mat(DARK_ROCK)))
+      rock.scale.set(scale, scale * 0.6, scale)
+      rock.position.set(rx, scale * 0.2, rz)
+      rock.rotation.set(Math.random(), Math.random(), Math.random())
+      group.add(rock)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ALIEN GEYSERS (4, animated)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const geyserDefs = [
+      { x: -20, z: 15 },
+      { x: 15,  z: -15 },
+      { x: -40, z: -50 },
+      { x: 45,  z: 50 },
+    ]
+    for (const g of geyserDefs) {
+      // Base vent
+      const vent = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.5, 0.5, 6), mat(DARK_ROCK)
+      ))
+      vent.position.set(g.x, 0.25, g.z)
+      group.add(vent)
+
+      // Geyser column (thin cylinder)
+      const col = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.15, 2.5, 6), mat(STEEL)
+      ))
+      col.position.set(g.x, 1.5, g.z)
+      group.add(col)
+
+      // Glowing mist at top
+      const mistMat = emissiveMat(CYAN_E, CYAN_E, 1.5, { transparent: true, opacity: 0.4 })
+      const mist = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5, 6, 5), mistMat
+      )
+      mist.position.set(g.x, 3.0, g.z)
+      group.add(mist)
+
+      geysers.push({ mesh: mist, material: mistMat, phase: Math.random() * Math.PI * 2 })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CONNECTED WALKWAYS / ROADS between buildings
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    // Metal gray plates connecting the 4 portfolio buildings
+    const walkDefs = [
+      { x: 0,  z: 0,  w: 3, d: 40, rot: 0 },     // N-S main path
+      { x: 0,  z: 0,  w: 40, d: 3, rot: 0 },      // E-W main path
+      // Diagonal paths to corners
+      { x: 10,  z: -10, w: 2, d: 14, rot: Math.PI / 4 },
+      { x: -10, z: 10,  w: 2, d: 14, rot: Math.PI / 4 },
+    ]
+    for (const w of walkDefs) {
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(w.w, 0.08, w.d),
+        mat(0x555566)
+      )
+      plate.position.set(w.x, 0.04, w.z)
+      plate.rotation.y = w.rot
+      plate.receiveShadow = true
+      group.add(plate)
+    }
+
+    // Metal grate details along main paths
+    for (let i = -18; i <= 18; i += 4) {
+      // N-S direction
+      const grateNS = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.8, 0.1), mat(0x444455)
+      )
+      grateNS.rotation.x = -Math.PI / 2
+      grateNS.position.set(0, 0.085, i)
+      group.add(grateNS)
+
+      // E-W direction
+      const grateEW = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.1, 2.8), mat(0x444455)
+      )
+      grateEW.rotation.x = -Math.PI / 2
+      grateEW.position.set(i, 0.085, 0)
+      group.add(grateEW)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SOLAR PANEL ARRAYS (6)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const solarDefs = [
+      { x: -15, z: -30, rot: 0 },
+      { x: 20,  z: -35, rot: 0.3 },
+      { x: -40, z: 5,   rot: -0.2 },
+      { x: 45,  z: 5,   rot: 0.4 },
+      { x: -10, z: 50,  rot: 0 },
+      { x: 30,  z: 45,  rot: -0.3 },
+    ]
+    for (const s of solarDefs) {
+      const sg = new THREE.Group()
+      sg.position.set(s.x, 0, s.z)
+      sg.rotation.y = s.rot
+
+      // Support pole
+      const pole = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.15, 2.5, 6), mat(STEEL)
+      ))
+      pole.position.y = 1.25
+      sg.add(pole)
+
+      // Panel grid (2x3)
+      for (let px = 0; px < 3; px++) {
+        for (let pz = 0; pz < 2; pz++) {
+          const panel = shadow(new THREE.Mesh(
+            new THREE.BoxGeometry(1.2, 0.06, 0.9), mat(PANEL_BLUE)
+          ))
+          panel.position.set(-1.2 + px * 1.3, 2.6, -0.5 + pz * 1.0)
+          panel.rotation.x = -0.3
+          sg.add(panel)
+        }
+      }
+
+      group.add(sg)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FUEL TANKS (4 horizontal cylinders)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const tankDefs = [
+      { x: 25,  z: -10, rot: 0.3 },
+      { x: -25, z: -10, rot: -0.2 },
+      { x: 35,  z: 30,  rot: 0.5 },
+      { x: -35, z: 30,  rot: -0.4 },
+    ]
+    for (const t of tankDefs) {
+      const tg = new THREE.Group()
+      tg.position.set(t.x, 0, t.z)
+      tg.rotation.y = t.rot
+
+      // Tank body (horizontal)
+      const tank = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.7, 0.7, 3.5, 8), mat(WHITE)
+      ))
+      tank.position.y = 0.8
+      tank.rotation.z = Math.PI / 2
+      tg.add(tank)
+
+      // End caps
+      for (let s = -1; s <= 1; s += 2) {
+        const cap = shadow(new THREE.Mesh(
+          new THREE.SphereGeometry(0.7, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(WHITE)
+        ))
+        cap.position.set(s * 1.75, 0.8, 0)
+        cap.rotation.z = s > 0 ? -Math.PI / 2 : Math.PI / 2
+        tg.add(cap)
+      }
+
+      // Supports
+      for (let ci = -1; ci <= 1; ci += 2) {
+        const cradle = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.15, 0.6, 0.9), mat(STEEL)
+        ))
+        cradle.position.set(ci * 0.9, 0.3, 0)
+        tg.add(cradle)
+      }
+
+      // Warning stripe
+      const ws = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.72, 0.72, 0.2, 8), mat(RED)
+      ))
+      ws.position.y = 0.8
+      ws.rotation.z = Math.PI / 2
+      tg.add(ws)
+
+      group.add(tg)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // EQUIPMENT CONTAINERS (8)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const contDefs = [
+      { x: -20, z: -30, color: WHITE, rot: 0.1 },
+      { x: -18, z: -31, color: STEEL, rot: -0.1 },
+      { x: 40,  z: -10, color: BLUE, rot: 0.3 },
+      { x: 38,  z: -8,  color: RED, rot: -0.2 },
+      { x: -40, z: 30,  color: ORANGE, rot: 0 },
+      { x: -38, z: 28,  color: STEEL, rot: 0.5 },
+      { x: 20,  z: 45,  color: WHITE, rot: -0.3 },
+      { x: 22,  z: 43,  color: BLUE, rot: 0.2 },
+    ]
+    for (const c of contDefs) {
+      const cont = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(2.5, 1.5, 1.2), mat(c.color)
+      ))
+      cont.position.set(c.x, 0.75, c.z)
+      cont.rotation.y = c.rot
+      group.add(cont)
+      // Ribs
+      for (let r = 0; r < 4; r++) {
+        const rib = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.06, 1.5, 1.22), mat(DARK_GRAY)
+        ))
+        rib.position.set(c.x - 0.9 + r * 0.6, 0.75, c.z)
+        rib.rotation.y = c.rot
+        group.add(rib)
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CONTROL PANELS (5)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const panelDefs = [
+      { x: 8,   z: -18, rot: 0 },
+      { x: 18,  z: 8,   rot: -1.5 },
+      { x: -8,  z: 18,  rot: Math.PI },
+      { x: -18, z: -8,  rot: 1.5 },
+      { x: 30,  z: -28, rot: 0.3 },
+    ]
+    for (const p of panelDefs) {
+      const pg = new THREE.Group()
+      pg.position.set(p.x, 0, p.z)
+      pg.rotation.y = p.rot
+
+      // Body
+      const body = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 1.2, 0.4), mat(DARK_GRAY)
+      ))
+      body.position.y = 0.6
+      pg.add(body)
+
+      // Emissive screen
+      const screen = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.5, 0.02),
+        emissiveMat(0x003322, GREEN_E, 1.5)
+      )
+      screen.position.set(0, 0.9, 0.21)
+      pg.add(screen)
+
+      // Buttons
+      const btnColors = [RED, YELLOW, GREEN_E]
+      for (let b = 0; b < 3; b++) {
+        const btn = new THREE.Mesh(
+          new THREE.SphereGeometry(0.04, 6, 4),
+          emissiveMat(btnColors[b], btnColors[b], 0.8)
+        )
+        btn.position.set(-0.15 + b * 0.15, 0.55, 0.21)
+        pg.add(btn)
+      }
+
+      // Pedestal
+      const ped = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3), mat(STEEL)
+      ))
+      ped.position.y = 0.15
+      pg.add(ped)
+
+      group.add(pg)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TELESCOPES (3)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const teleDefs = [
+      { x: -50, z: 40 },
+      { x: 50,  z: -50 },
+      { x: -55, z: -40 },
+    ]
+    for (const t of teleDefs) {
+      const tg = new THREE.Group()
+      tg.position.set(t.x, 0, t.z)
+
+      // Tripod
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2
+        const leg = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.04, 0.04, 1.8, 4), mat(DARK_GRAY)
+        ))
+        leg.position.set(Math.cos(a) * 0.4, 0.8, Math.sin(a) * 0.4)
+        leg.rotation.x = Math.sin(a) * 0.25
+        leg.rotation.z = -Math.cos(a) * 0.25
+        tg.add(leg)
+      }
+
+      // Tube
+      const tube = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.18, 1.5, 8), mat(WHITE)
+      ))
+      tube.position.set(0, 1.6, 0)
+      tube.rotation.z = 0.6
+      tg.add(tube)
+
+      // Lens
+      const lens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.18, 8),
+        emissiveMat(LIGHT_BLUE, CYAN_E, 0.3)
+      )
+      lens.position.set(0.55, 2.1, 0)
+      lens.rotation.y = Math.PI / 2
+      lens.rotation.z = 0.6
+      tg.add(lens)
+
+      group.add(tg)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // WARNING LIGHTS ON PYLONS (4)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const pylonDefs = [
+      { x: 10,  z: -25 },
+      { x: -10, z: 25 },
+      { x: 25,  z: 10 },
+      { x: -25, z: -10 },
+    ]
+    for (const p of pylonDefs) {
+      // Pylon
+      const pylon = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 4, 6), mat(STEEL)
+      ))
+      pylon.position.set(p.x, 2, p.z)
+      group.add(pylon)
+
+      // Light
+      const wl = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 6, 6),
+        emissiveMat(RED, RED, 2.0)
+      )
+      wl.position.set(p.x, 4.1, p.z)
+      group.add(wl)
+      warningLights.push(wl)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ANTENNA TOWERS (5)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const antDefs = [
+      { x: -55, z: 0 },
+      { x: 55,  z: 0 },
+      { x: 0,   z: 55 },
+      { x: 0,   z: -55 },
+      { x: -30, z: 50 },
+    ]
+    for (const a of antDefs) {
+      const mast = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.08, 6, 4), mat(STEEL)
+      ))
+      mast.position.set(a.x, 3, a.z)
+      group.add(mast)
+
+      // Elements
+      for (let e = 0; e < 3; e++) {
+        const el = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(1.5, 0.04, 0.04), mat(SILVER)
+        ))
+        el.position.set(a.x, 5 + e * 0.5, a.z)
+        group.add(el)
+      }
+
+      // Tip light
+      const tip = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 6, 4),
+        emissiveMat(RED, RED, 1.5)
+      )
+      tip.position.set(a.x, 6.1, a.z)
+      group.add(tip)
+      warningLights.push(tip)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CABLE RUNS (connecting structures)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const cableDefs = [
+      { x1: 0, z1: -20, x2: 15, z2: 35 },
+      { x1: 20, z1: 0, x2: -20, z2: 0 },
+      { x1: 0, z1: 20, x2: 30, z2: -30 },
+    ]
+    for (const c of cableDefs) {
+      const dx = c.x2 - c.x1
+      const dz = c.z2 - c.z1
+      const len = Math.sqrt(dx * dx + dz * dz)
+      const angle = Math.atan2(dx, dz)
+
+      const cable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, len, 4),
+        mat(0x555555)
+      )
+      cable.position.set((c.x1 + c.x2) / 2, 0.03, (c.z1 + c.z2) / 2)
+      cable.rotation.y = angle
+      cable.rotation.z = Math.PI / 2
+      cable.rotation.order = 'YZX'
+      group.add(cable)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // OXYGEN TANKS near buildings (static decorations, 6)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const o2Defs = [
+      { x: 3,   z: -22 },
+      { x: -3,  z: -22 },
+      { x: 22,  z: 3 },
+      { x: -22, z: -3 },
+      { x: 3,   z: 22 },
+      { x: -3,  z: 22 },
+    ]
+    for (const o of o2Defs) {
+      const tank = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.15, 0.6, 6), mat(WHITE)
+      ))
+      tank.position.set(o.x, 0.3, o.z)
+      group.add(tank)
+      // Cap
+      const cap = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2), mat(SILVER)
+      ))
+      cap.position.set(o.x, 0.6, o.z)
+      group.add(cap)
+      // Valve
+      const valve = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 0.12, 4), mat(RED)
+      ))
+      valve.position.set(o.x, 0.7, o.z)
+      group.add(valve)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ROBOTIC ARM
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const ax = 30, az = 15
+    // Base
+    const base = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.8, 0.5, 8), mat(STEEL)
+    ))
+    base.position.set(ax, 0.25, az)
+    group.add(base)
+
+    // Lower arm
+    const arm1 = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.15, 2.5, 6), mat(SILVER)
+    ))
+    arm1.position.set(ax, 1.5, az)
+    arm1.rotation.z = 0.3
+    group.add(arm1)
+
+    // Joint
+    const joint = shadow(new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 6, 6), mat(RED)
+    ))
+    joint.position.set(ax + 0.75, 2.7, az)
+    group.add(joint)
+
+    // Upper arm
+    const arm2 = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.12, 2.0, 6), mat(SILVER)
+    ))
+    arm2.position.set(ax + 1.3, 2.2, az)
+    arm2.rotation.z = -0.8
+    group.add(arm2)
+
+    // Gripper
+    for (let s = -1; s <= 1; s += 2) {
+      const grip = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.05, 0.4, 0.08), mat(DARK_GRAY)
+      ))
+      grip.position.set(ax + 1.9 + s * 0.08, 1.5, az)
+      group.add(grip)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ASTRONAUT FIGURES (4)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const astroDefs = [
+      { x: 5,   z: -18, rot: 0 },
+      { x: 18,  z: 5,   rot: -1.5 },
+      { x: -5,  z: 18,  rot: Math.PI },
+      { x: 32,  z: -28, rot: 0.5 },
+    ]
+    for (const a of astroDefs) {
+      const ag = new THREE.Group()
+      ag.position.set(a.x, 0, a.z)
+      ag.rotation.y = a.rot
+
+      // Legs
+      for (let s = -1; s <= 1; s += 2) {
+        const leg = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.14, 0.8, 6), mat(WHITE)
+        ))
+        leg.position.set(s * 0.18, 0.4, 0)
+        ag.add(leg)
+        // Boots
+        const boot = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.2, 0.15, 0.3), mat(DARK_GRAY)
+        ))
+        boot.position.set(s * 0.18, 0.07, 0.05)
+        ag.add(boot)
+      }
+
+      // Body
+      const body = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.55, 0.7, 0.35), mat(WHITE)
+      ))
+      body.position.y = 1.15
+      ag.add(body)
+
+      // Backpack
+      const backpack = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.45, 0.5, 0.2), mat(SILVER)
+      ))
+      backpack.position.set(0, 1.15, -0.25)
+      ag.add(backpack)
+
+      // Arms
+      for (let s = -1; s <= 1; s += 2) {
+        const arm = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6), mat(WHITE)
+        ))
+        arm.position.set(s * 0.38, 1.1, 0)
+        arm.rotation.z = s * 0.3
+        ag.add(arm)
+        // Gloves
+        const glove = shadow(new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 6, 5), mat(SILVER)
+        ))
+        glove.position.set(s * 0.5, 0.82, 0)
+        ag.add(glove)
+      }
+
+      // Head
+      const head = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 8, 6), mat(WHITE)
+      ))
+      head.position.y = 1.72
+      ag.add(head)
+
+      // Visor
+      const visor = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 8, 6, 0, Math.PI, 0, Math.PI / 2),
+        emissiveMat(0x112244, 0x112244, 0.3)
+      )
+      visor.position.set(0, 1.72, 0.12)
+      visor.rotation.x = -Math.PI / 2
+      ag.add(visor)
+
+      group.add(ag)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DYNAMIC OBJECTS — pushable!
+  // ═══════════════════════════════════════════════════════════════════
+
+  // — Supply Crates (6, dynamic) —
+  {
+    const crateDefs = [
+      { x: 5,   z: 5 },
+      { x: -5,  z: 5 },
+      { x: 5,   z: -5 },
+      { x: -5,  z: -5 },
+      { x: 12,  z: -12 },
+      { x: -12, z: 12 },
+    ]
+    for (const c of crateDefs) {
+      const size = 0.4
+      const crateMesh = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(size * 2, size * 2, size * 2), mat(STEEL)
+      ))
+      crateMesh.position.set(c.x, size, c.z)
+      group.add(crateMesh)
+
+      // Orange stripe
+      const stripe = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(size * 2.02, 0.12, size * 2.02), mat(ORANGE)
+      ))
+      stripe.position.set(c.x, size, c.z)
+      group.add(stripe)
+
+      const bd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(c.x, size, c.z)
+        .setLinearDamping(0.4).setAngularDamping(0.5)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(size, size, size)
+          .setDensity(4.0).setFriction(0.5).setRestitution(0.15), body
+      )
+      syncList.push({ mesh: crateMesh, body })
+    }
+  }
+
+  // — Fuel Barrels (4, dynamic) —
+  {
+    const barrelDefs = [
+      { x: 8,   z: 15 },
+      { x: -8,  z: -15 },
+      { x: 15,  z: 8 },
+      { x: -15, z: -8 },
+    ]
+    for (const b of barrelDefs) {
+      const barrelMesh = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.35, 0.9, 8), mat(RED)
+      ))
+      barrelMesh.position.set(b.x, 0.45, b.z)
+      group.add(barrelMesh)
+
+      // Band
+      const band = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.36, 0.36, 0.1, 8), mat(YELLOW)
+      ))
+      band.position.set(b.x, 0.55, b.z)
+      group.add(band)
+
+      const bd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(b.x, 0.45, b.z)
+        .setLinearDamping(0.3).setAngularDamping(0.4)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cylinder(0.45, 0.35)
+          .setDensity(5.0).setFriction(0.4).setRestitution(0.2), body
+      )
+      syncList.push({ mesh: barrelMesh, body })
+    }
+  }
+
+  // — Satellites on Stands (3, dynamic — knock them over!) —
+  {
+    const satDefs = [
+      { x: -10, z: -35 },
+      { x: 40,  z: 10 },
+      { x: -30, z: 45 },
+    ]
+    for (const s of satDefs) {
+      const sg = new THREE.Group()
+
+      // Satellite body
+      const satBody = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.5, 0.5), mat(SILVER)
+      ))
+      sg.add(satBody)
+
+      // Solar wings
+      for (let side = -1; side <= 1; side += 2) {
+        const wing = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.8, 0.04, 0.4), mat(PANEL_BLUE)
+        ))
+        wing.position.set(side * 0.65, 0, 0)
+        sg.add(wing)
+      }
+
+      // Antenna
+      const ant = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4), mat(STEEL)
+      ))
+      ant.position.y = 0.45
+      sg.add(ant)
+
+      sg.position.set(s.x, 1.3, s.z)
+      group.add(sg)
+
+      // Stand (visual only)
+      const stand = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 1.2, 6), mat(STEEL)
+      ))
+      stand.position.set(s.x, 0.6, s.z)
+      group.add(stand)
+      const standBase = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.3, 0.1, 6), mat(DARK_GRAY)
+      ))
+      standBase.position.set(s.x, 0.05, s.z)
+      group.add(standBase)
+
+      const bd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(s.x, 1.3, s.z)
+        .setLinearDamping(0.3).setAngularDamping(0.4)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(0.65, 0.25, 0.25)
+          .setDensity(2.0).setFriction(0.4).setRestitution(0.3), body
+      )
+      syncList.push({ mesh: sg, body })
+    }
+  }
+
+  // — Alien Crystals (5, dynamic — low density, scatter easily!) —
+  {
+    const acDefs = [
+      { x: 7,   z: 7,   color: 0xaa44ff },
+      { x: -7,  z: -7,  color: 0x44aaff },
+      { x: 10,  z: -10, color: 0xff44aa },
+      { x: -10, z: 10,  color: 0x44ff88 },
+      { x: 15,  z: 15,  color: 0xaa44ff },
+    ]
+    for (const c of acDefs) {
+      const crystalMat = emissiveMat(c.color, c.color, 1.2, { transparent: true, opacity: 0.7 })
+      const crystalMesh = shadow(new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.4, 0), crystalMat
+      ))
+      crystalMesh.position.set(c.x, 0.5, c.z)
+      group.add(crystalMesh)
+
+      const bd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(c.x, 0.5, c.z)
+        .setLinearDamping(0.2).setAngularDamping(0.3)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.ball(0.4)
+          .setDensity(1.0).setFriction(0.3).setRestitution(0.5), body
+      )
+      syncList.push({ mesh: crystalMesh, body })
+    }
+  }
+
+  // — Dynamic Oxygen Tanks (3) —
+  {
+    const o2Defs = [
+      { x: 6,   z: -6 },
+      { x: -6,  z: 6 },
+      { x: 12,  z: 0 },
+    ]
+    for (const o of o2Defs) {
+      const tankMesh = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.15, 0.6, 6), mat(WHITE)
+      ))
+      tankMesh.position.set(o.x, 0.3, o.z)
+      group.add(tankMesh)
+
+      const bd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(o.x, 0.3, o.z)
+        .setLinearDamping(0.3).setAngularDamping(0.4)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cylinder(0.3, 0.15)
+          .setDensity(3.0).setFriction(0.4).setRestitution(0.2), body
+      )
+      syncList.push({ mesh: tankMesh, body })
+    }
+  }
+
+  // — Repair Kits (2, dynamic small boxes) —
+  {
+    const rkDefs = [
+      { x: 3,   z: 10 },
+      { x: -3,  z: -10 },
+    ]
+    for (const r of rkDefs) {
+      const kitMesh = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.3, 0.35), mat(GREEN_E)
+      ))
+      kitMesh.position.set(r.x, 0.15, r.z)
+      group.add(kitMesh)
+
+      // Cross symbol
+      const crossH = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.05, 0.02), mat(WHITE)
+      ))
+      crossH.position.set(0, 0.05, 0.18)
+      kitMesh.add(crossH)
+      const crossV = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.05, 0.2, 0.02), mat(WHITE)
+      ))
+      crossV.position.set(0, 0.02, 0.18)
+      kitMesh.add(crossV)
+
+      const bd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(r.x, 0.15, r.z)
+        .setLinearDamping(0.3).setAngularDamping(0.4)
+      const body = world.createRigidBody(bd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(0.25, 0.15, 0.175)
+          .setDensity(3.0).setFriction(0.5).setRestitution(0.1), body
+      )
+      syncList.push({ mesh: kitMesh, body })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ADD EVERYTHING TO SCENE
+  // ═══════════════════════════════════════════════════════════════════
+  scene.add(group)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // RETURN with update loop
+  // ═══════════════════════════════════════════════════════════════════
+  return {
+    syncList,
+    update(dt) {
+      elapsed += dt
+
+      // Satellite dish rotation
+      for (const d of dishes) {
+        d.group.rotation.y += d.speed * dt
+      }
+
+      // Alien plant glow pulsing
+      for (const p of alienPlants) {
+        const pulse = (Math.sin(elapsed * 2.0 + p.phase) + 1) * 0.5
+        p.material.emissiveIntensity = p.baseIntensity * (0.4 + pulse * 0.8)
+        p.mesh.scale.setScalar(0.9 + pulse * 0.2)
+      }
+
+      // Warning light pulsing
+      const wPulse = (Math.sin(elapsed * 4.0) + 1) * 0.5
+      for (const wl of warningLights) {
+        wl.material.emissiveIntensity = 0.5 + wPulse * 3.0
+        wl.scale.setScalar(0.8 + wPulse * 0.4)
+      }
+
+      // Geyser animation
+      for (const g of geysers) {
+        const gPulse = (Math.sin(elapsed * 3.0 + g.phase) + 1) * 0.5
+        g.material.opacity = 0.15 + gPulse * 0.5
+        g.material.emissiveIntensity = 0.5 + gPulse * 2.0
+        g.mesh.scale.setScalar(0.6 + gPulse * 0.8)
+        g.mesh.position.y = 3.0 + gPulse * 0.5
+      }
+
+      // Crystal shimmer
+      for (const c of crystals) {
+        const cPulse = (Math.sin(elapsed * 1.5 + c.phase) + 1) * 0.5
+        c.material.emissiveIntensity = 0.3 + cPulse * 1.0
+      }
+    },
+  }
+}
