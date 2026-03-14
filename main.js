@@ -1,8 +1,5 @@
 /**
- * Main game loop — Rapier hybrid physics with themed worlds.
- *
- * World selection via URL: ?world=city|carnival|beach|forest|construction|japanese|space|farm|playground|racing
- * Each world creates ground, vegetation, decorations, interactive objects, and boundary walls.
+ * Main game loop — Rapier hybrid physics with racing world.
  */
 import { createRenderer }      from './src/core/renderer.js'
 import { createScene }          from './src/core/scene.js'
@@ -14,6 +11,7 @@ import { createCar }            from './src/entities/car.js'
 import { createLocations }      from './src/entities/locations.js'
 import { createUI }             from './src/ui/ui.js'
 import { createPopup }          from './src/ui/popup.js'
+import { createWorld }          from './src/worlds/racing.js'
 
 // ── Boot — Rapier WASM must be initialised before anything else ───
 const MIN_DISPLAY_MS = 3000
@@ -38,10 +36,8 @@ const { carBody, carCollider } = createColliderWorld(RAPIER, world)
 const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision } =
   createCar(scene, { RAPIER, world, carBody, carCollider })
 
-// ── Load selected world ─────────────────────────────────────────
-const worldId = new URLSearchParams(window.location.search).get('world') || 'city'
-const worldModule = await import(`./src/worlds/${worldId}.js`)
-const { syncList: worldSyncList, update: updateWorld } = worldModule.createWorld(scene, RAPIER, world)
+// ── Load world ──────────────────────────────────────────────────
+const { syncList: worldSyncList, update: updateWorld } = createWorld(scene, RAPIER, world)
 
 // ── HUD + popup ─────────────────────────────────────────────────
 const { updateProximityPrompt } = createUI()
