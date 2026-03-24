@@ -200,9 +200,15 @@ function _buildLocationMesh(def) {
 
 export function createLocations(scene) {
   const locations = []
+  /** Map of location id -> { proceduralGroup, loadedRoot } for model swapping */
+  const _meshRefs = {}
 
   for (const def of LOCATION_DEFS) {
-    scene.add(_buildLocationMesh(def))
+    const proceduralGroup = _buildLocationMesh(def)
+    scene.add(proceduralGroup)
+
+    _meshRefs[def.id] = { proceduralGroup, loadedRoot: null }
+
     locations.push({
       id:       def.id,
       label:    def.label,
@@ -213,5 +219,65 @@ export function createLocations(scene) {
     })
   }
 
-  return { locations }
+  /**
+   * Replace a building's procedural mesh with a loaded GLTF scene.
+   * The procedural mesh is hidden (not removed) so it can serve as fallback.
+   *
+   * @param {string} locationId — id of the location (e.g. 'about', 'projects')
+   * @param {THREE.Object3D} gltfScene — the `gltf.scene` from GLTFLoader
+   * @param {Object} [opts]
+   * @param {number} [opts.scale=1] — uniform scale for the model
+   * @param {THREE.Vector3} [opts.offset] — positional offset to center the model
+   */
+  function useLoadedModel(locationId, gltfScene, opts = {}) {
+    const ref = _meshRefs[locationId]
+    if (!ref) {
+      console.warn(`[locations] unknown location id: ${locationId}`)
+      return
+    }
+
+    const scale = opts.scale ?? 1
+    const offset = opts.offset
+
+    // Hide procedural mesh
+    ref.proceduralGroup.visible = false
+
+    // Remove previous loaded model if any
+    if (ref.loadedRoot) {
+      ref.proceduralGroup.parent.remove(ref.loadedRoot)
+    }
+
+    // Add loaded model at the same position as the procedural group
+    ref.loadedRoot = gltfScene.clone()
+    ref.loadedRoot.scale.setScalar(scale)
+    ref.loadedRoot.position.copy(ref.proceduralGroup.position)
+    if (offset) ref.loadedRoot.position.add(offset)
+
+    // Ensure shadows
+    ref.loadedRoot.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+
+    scene.add(ref.loadedRoot)
+  }
+
+  /**
+   * Revert a building to its procedural mesh.
+   * @param {string} locationId
+   */
+  function useProceduralMesh(locationId) {
+    const ref = _meshRefs[locationId]
+    if (!ref) return
+
+    if (ref.loadedRoot) {
+      ref.proceduralGroup.parent.remove(ref.loadedRoot)
+      ref.loadedRoot = null
+    }
+    ref.proceduralGroup.visible = true
+  }
+
+  return { locations, useLoadedModel, useProceduralMesh }
 }

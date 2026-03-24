@@ -105,6 +105,53 @@ export function createCar(scene, rapierCtx) {
   let impactSpeed = 0
   let prevSpeed = 0
 
+  // Loaded model state (null = using procedural mesh)
+  let _loadedModelRoot = null
+
+  /**
+   * Replace the procedural car mesh with a loaded GLTF scene.
+   * The loaded model is added as a child of carGroup and the procedural
+   * children are hidden (not removed, so we can fall back).
+   *
+   * @param {THREE.Object3D} gltfScene — the `gltf.scene` from GLTFLoader
+   * @param {Object} [opts]
+   * @param {number} [opts.scale=1] — uniform scale for the model
+   * @param {THREE.Vector3} [opts.offset] — positional offset to center the model
+   */
+  function useLoadedModel(gltfScene, opts = {}) {
+    const scale = opts.scale ?? 1
+    const offset = opts.offset
+
+    // Hide procedural mesh children
+    carGroup.children.forEach((child) => { child.visible = false })
+
+    // Add loaded model
+    _loadedModelRoot = gltfScene.clone()
+    _loadedModelRoot.scale.setScalar(scale)
+    if (offset) _loadedModelRoot.position.copy(offset)
+
+    // Ensure shadows
+    _loadedModelRoot.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+
+    carGroup.add(_loadedModelRoot)
+  }
+
+  /**
+   * Revert to the procedural car mesh — removes loaded model if present.
+   */
+  function useProceduralMesh() {
+    if (_loadedModelRoot) {
+      carGroup.remove(_loadedModelRoot)
+      _loadedModelRoot = null
+    }
+    carGroup.children.forEach((child) => { child.visible = true })
+  }
+
   function preStep(keys) {
     prevSpeed = Math.abs(state.velocity)
 
@@ -128,9 +175,11 @@ export function createCar(scene, rapierCtx) {
     _euler.set(0, state.rotation, 0)
     carGroup.quaternion.setFromEuler(_euler)
 
-    // Front wheel visual steering
-    flGroup.rotation.y = state.steer
-    frGroup.rotation.y = state.steer
+    // Front wheel visual steering (only relevant for procedural mesh)
+    if (!_loadedModelRoot) {
+      flGroup.rotation.y = state.steer
+      frGroup.rotation.y = state.steer
+    }
 
     // Check for collision via Rapier contact pairs
     world.contactPairsWith(carCollider, (otherCollider) => {
@@ -159,7 +208,7 @@ export function createCar(scene, rapierCtx) {
     return 0
   }
 
-  return { carState: state, preStep, postStep, consumeCollision }
+  return { carState: state, preStep, postStep, consumeCollision, useLoadedModel, useProceduralMesh }
 }
 
 function _emitBurst(dust, state) {

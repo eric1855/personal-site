@@ -12,6 +12,14 @@ import { createLocations }      from './src/entities/locations.js'
 import { createUI }             from './src/ui/ui.js'
 import { createPopup }          from './src/ui/popup.js'
 import { createWorld }          from './src/worlds/space.js'
+import { createNameBlocks }     from './src/entities/nameBlocks.js'
+import { createPostProcessing } from './src/core/postprocessing.js'
+import { createEnvironment }    from './src/core/environment.js'
+import { createLabels }         from './src/ui/labels.js'
+import { initAnimations, playIntroSequence, animatePopupOpen, animatePopupClose, getCameraMode, CameraMode } from './src/core/animations.js'
+import { initAudio, updateAudioEngine, playCollisionSound, playPopupOpenSound, playPopupCloseSound, playProximitySound } from './src/core/audio.js'
+import { initLoaders }          from './src/core/assetLoader.js'
+import { initQuality, updateQuality } from './src/core/quality.js'
 
 // ── Boot — Rapier WASM must be initialised before anything else ───
 const MIN_DISPLAY_MS = 3000
@@ -23,11 +31,20 @@ const { renderer } = createRenderer()
 const { scene }    = createScene()
 const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
 
+// ── Asset loader + adaptive quality ─────────────────────────────
+initLoaders()
+initQuality(renderer)
+
+// ── Post-processing + environment ─────────────────────────────
+const { composer } = createPostProcessing(renderer, scene, camera)
+createEnvironment(renderer, scene)
+
 // ── Input ───────────────────────────────────────────────────────
 const { keys } = createInput()
 
 // ── Portfolio buildings (constant across all worlds) ─────────────
 const { locations }  = createLocations(scene)
+createLabels(scene, locations)
 
 // ── Car + building colliders ────────────────────────────────────
 const { carBody, carCollider } = createColliderWorld(RAPIER, world)
@@ -39,19 +56,38 @@ const { carState, preStep: carPreStep, postStep: carPostStep, consumeCollision }
 // ── Load world ──────────────────────────────────────────────────
 const { syncList: worldSyncList, update: updateWorld } = createWorld(scene, RAPIER, world)
 
+// ── Name blocks + "IN PROGRESS" sign near spawn ─────────────
+const { syncList: nameSyncList } = createNameBlocks(scene, RAPIER, world)
+worldSyncList.push(...nameSyncList)
+
 // ── HUD + popup ─────────────────────────────────────────────────
 const { updateProximityPrompt } = createUI()
-const popup = createPopup(() => { isPaused = false })
+const popup = createPopup(() => {
+  isPaused = false
+  playPopupCloseSound()
+  animatePopupClose()
+})
+
+// ── Animations + Audio ────────────────────────────────────────────
+initAnimations(camera, carState)
+initAudio()
 
 let isPaused     = false
 let prevInteract = false
+let prevNear     = null
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && isPaused) { isPaused = false; popup.close() }
+  if (e.code === 'Escape' && isPaused) {
+    isPaused = false
+    popup.close()
+    playPopupCloseSound()
+    animatePopupClose()
+  }
 })
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight)
+  composer.setSize(window.innerWidth, window.innerHeight)
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
 })
@@ -81,27 +117,36 @@ function loop(now) {
   carPostStep()
   _syncDynamicBodies(worldSyncList)
 
-  // Camera shake on collision
+  // Camera shake + sound on collision
   const impactSpeed = consumeCollision()
   if (impactSpeed > 0) {
     const MAX_SPEED = 0.18
     const intensity = 0.03 + (impactSpeed / MAX_SPEED) * 0.10
     shakeCamera(intensity)
+    playCollisionSound(impactSpeed)
   }
+
+  // Engine audio modulation
+  updateAudioEngine(carState.speed)
 
   // Proximity / interaction
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
+  if (near && !prevNear) playProximitySound()
+  prevNear = near
 
   const triggered = keys.interact && !prevInteract
   prevInteract = keys.interact
   if (triggered && near && !isPaused) {
     isPaused = true
     popup.open(near)
+    playPopupOpenSound()
+    animatePopupOpen(near)
   }
 
-  updateCamera(carState)
-  renderer.render(scene, camera)
+  if (getCameraMode() === CameraMode.FOLLOW) updateCamera(carState)
+  updateQuality(now)
+  composer.render()
 }
 
 // ── Dismiss loading screen after minimum display time, then start loop ──
@@ -111,6 +156,7 @@ const _remaining = Math.max(0, MIN_DISPLAY_MS - _bootElapsed)
 setTimeout(() => {
   const ls = document.getElementById('loading-screen')
   ls.classList.add('fade-out')
+  playIntroSequence()
   let started = false
   const start = () => {
     if (started) return

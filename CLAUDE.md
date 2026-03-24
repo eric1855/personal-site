@@ -11,19 +11,31 @@ Interactive pushable objects, animated attractions, and knockable trees add phys
 - **Vite** + vanilla JS (ESM modules), no React, no TypeScript
 - **Three.js** for 3D rendering
 - **Rapier** (`@dimforge/rapier3d-compat`) for full dynamic physics (hybrid kinematic car + dynamic objects)
+- **postprocessing** (pmndrs) for Bloom + Vignette post-processing pipeline
+- **troika-three-text** for SDF-rendered 3D text labels
+- **GSAP** for camera/UI animations (intro sequence, popup transitions)
+- **Howler.js** for spatial audio (engine hum, collision sounds, UI sounds, ambient loops)
 
 ## File Structure
 ```
 main.js                   game loop, wires everything together (async init for Rapier)
 src/core/
-  renderer.js             WebGL renderer setup
+  renderer.js             WebGL renderer setup + ACES filmic tone mapping
   scene.js                lights, fog, background
-  camera.js               follow camera (fixed world-space offset) + shake effect
+  camera.js               follow camera (lerp-smoothed position + look-at) + shake effect
   input.js                keyboard state (WASD + E)
+  animations.js           GSAP animation system — intro camera sweep, popup camera transitions, camera mode constants (FOLLOW/SCRIPTED/TRANSITION)
+  audio.js                Howler.js sound manager — engine hum (speed-modulated), collision, popup open/close, proximity prompt, ambient loop; mute button in HUD; init on first user gesture; graceful stubs for missing audio files
+  postprocessing.js       pmndrs EffectComposer — Bloom + Vignette (replaces renderer.render)
+  environment.js          procedural PMREMGenerator environment map for PBR reflections
+  materials.js            centralized material factory — metal/glass/organic presets (flatShading: true)
+  assetLoader.js          GLTFLoader + DRACOLoader with centralized LoadingManager, model cache, progress tracking
+  instancing.js           InstancedMesh utilities — createInstancedFromTemplate() + updateInstanceTransform()
+  quality.js              adaptive quality system — High/Medium/Low tiers, auto FPS monitoring, tier switching, localStorage persistence, dev debug overlay
 src/entities/
-  car.js                  car mesh + hybrid kinematic/dynamic step + dust particles + collision dust burst
+  car.js                  car mesh + hybrid kinematic/dynamic step + dust particles + collision dust burst + useLoadedModel()/useProceduralMesh() for GLB model swap
   worldObjects.js         ground mesh + tree visual meshes (returned for Rapier body sync)
-  locations.js            portfolio buildings (visual mesh only)
+  locations.js            portfolio buildings (visual mesh only) + useLoadedModel()/useProceduralMesh() per building for GLB model swap
   interactables.js        interactive physics objects: dominos, box pyramid, bouncy spheres
 src/physics/
   engine.js               Rapier WASM init + world creation (gravity: {0, -20, 0})
@@ -53,6 +65,11 @@ src/worlds/
 src/ui/
   ui.js                   proximity HUD prompt
   popup.js                location content popup
+  labels.js               3D SDF text labels above portfolio buildings (troika-three-text)
+public/assets/audio/      placeholder directory for audio files (engine, collision, popup, proximity, ambient)
+public/assets/models/     directory for GLB/GLTF 3D models (loaded via assetLoader.js)
+scripts/
+  optimize-models.sh      placeholder script for future @gltf-transform/cli model optimization
 ```
 
 ## Zone / World Architecture
@@ -84,16 +101,52 @@ while (accumulator >= 1/60):
   accumulator -= 1/60
 carPostStep()              ← readFromRapier() + sync car mesh
 syncDynamicBodies()        ← sync trees + interactables + zone dynamic objects
-consume collision          ← trigger camera shake if impact occurred
-camera update → render
+consume collision          ← trigger camera shake + collision sound if impact occurred
+updateAudioEngine(speed)   ← modulate engine hum pitch/volume by car speed
+proximity sound            ← play on first entering location radius
+camera update (if FOLLOW mode) → updateQuality(now) → composer.render() (post-processing: Bloom + Vignette)
 ```
 
-## Loading Screen
+## Loading Screen & Intro
 - Pure CSS animated loading screen in `index.html`
 - CSS car drives across a road line, dust trail, spinning wheels
 - Text reveals: name (0.3s) → subtitle (1.0s) → WASD/E controls (1.8s)
 - Minimum display time: `MIN_DISPLAY_MS = 3000`
-- Game loop starts only AFTER loading screen fades out
+- GSAP intro camera sequence plays as loading screen fades: birds-eye sweep → zoom down to car
+- Game loop starts only AFTER loading screen fades out; camera mode transitions from SCRIPTED → FOLLOW
+
+## Audio
+- Howler.js-based sound manager initialised on first user gesture (browser autoplay policy)
+- Engine hum: looping, playback rate 0.6–1.5 mapped from carState.speed
+- Collision: volume scales with impact speed
+- UI sounds: popup open/close, proximity prompt appear
+- Ambient: per-world background loop (switchable via `setAmbient(worldName)`)
+- Mute/unmute button in HUD (top-right), preference persisted in localStorage
+- All sounds use try/catch + loaderror handlers; missing audio files never crash the app
+- Audio files go in `public/assets/audio/` (currently empty — placeholder stubs)
+
+## 3D Model Pipeline
+- `assetLoader.js`: centralized GLTFLoader + DRACOLoader with Three.js LoadingManager
+  - `initLoaders()` — initialise once at boot (auto-inits if `loadModel()` called first)
+  - `loadModel(path)` — returns cached Promise\<GLTF\>, deduplicates in-flight loads
+  - `getLoadingProgress()` — returns 0..1 for loading bar integration
+  - Draco decoder loaded from jsDelivr CDN (no extra npm packages)
+- `instancing.js`: batch identical meshes into single draw calls
+  - `createInstancedFromTemplate(mesh, transforms[])` — returns InstancedMesh
+  - `updateInstanceTransform(instancedMesh, index, pos, rot, scale)` — update single instance
+- Car and buildings support model swapping:
+  - `car.js`: `useLoadedModel(gltfScene, {scale, offset})` / `useProceduralMesh()`
+  - `locations.js`: `useLoadedModel(locationId, gltfScene, {scale, offset})` / `useProceduralMesh(locationId)`
+  - Procedural meshes are hidden (not removed) when a loaded model is active — instant fallback
+- Models go in `public/assets/models/`; optimize with `scripts/optimize-models.sh` (requires `@gltf-transform/cli`)
+
+## Adaptive Quality
+- Three tiers: High (2048 shadows, full pixel ratio, all post-processing), Medium (1024 shadows, 1.5x pixel ratio, no SSAO), Low (512 shadows, 1x pixel ratio, no post-processing)
+- Auto-detect: FPS < 45 for 3s → drop tier; FPS > 58 for 10s → try upgrading
+- Mobile devices start at Medium tier
+- Tier preference saved in localStorage (`quality-tier` key)
+- Dev mode (`import.meta.env.DEV`): debug overlay shows FPS, quality tier, draw calls, triangles, shader programs
+- `updateQuality(now)` called every frame in the render loop
 
 ## Claude Workflow Rules
 - **After every file write or deletion, update this CLAUDE.md** to reflect the current state of the project.
