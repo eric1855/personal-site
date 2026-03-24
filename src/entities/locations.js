@@ -11,19 +11,7 @@ const LOCATION_DEFS = [
     signOffset: { x: 0, y: 4.7, z: 1.57 },
     content: `
       <h3 style="margin:0 0 12px;font-size:1.1rem;color:#5b8dee;">Hi, I'm Eric</h3>
-      <p style="margin:0 0 16px;">CS and Math student at Carnegie Mellon University (3.93 GPA, May 2027). I build things across ML, robotics, full-stack web, and creative coding.</p>
-      <div style="margin:0 0 16px;">
-        <h4 style="margin:0 0 8px;font-size:0.95rem;color:rgba(255,255,255,0.7);">Skills</h4>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${['C','C++','Java','JavaScript','Python','Dart','PyTorch','React.js','Node.js','AWS','Kubernetes','Docker','Flutter','Arduino','Figma','Git'].map(s =>
-            `<span style="padding:3px 10px;border-radius:6px;background:rgba(91,141,238,0.15);border:1px solid rgba(91,141,238,0.3);font-size:0.8rem;color:rgba(255,255,255,0.85);">${s}</span>`
-          ).join('')}
-        </div>
-      </div>
-      <div>
-        <h4 style="margin:0 0 8px;font-size:0.95rem;color:rgba(255,255,255,0.7);">Awards</h4>
-        <p style="margin:0;font-size:0.9rem;">USACO Gold Division (2023, 2024) &middot; 4X AIME Qualifier &middot; Science Olympiad 20-time medalist</p>
-      </div>
+      <p style="margin:0;">From Las Vegas. I love race cars.</p>
     `,
   },
   {
