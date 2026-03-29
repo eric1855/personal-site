@@ -2,20 +2,23 @@ import * as THREE from 'three'
 
 /**
  * Creates the ground plane, trees, paths, ground variation, and decorative props.
- * Trees are returned as a list for syncing with their Rapier dynamic bodies.
+ * Interactive objects (rocks, trees, benches, lampposts, signposts) get dynamic
+ * Rapier bodies so the car can knock them around.
  */
-export function createWorldObjects(scene) {
-  _createGround(scene)
+export function createWorldObjects(scene, RAPIER, world) {
+  const syncList = []
+
+  // Ground plane comes from the active world (space.js etc.) — don't duplicate
   _createGroundVariation(scene)
   _createPaths(scene)
-  _createLampposts(scene)
-  _createBenches(scene)
-  _createRocks(scene)
+  _createLampposts(scene, RAPIER, world, syncList)
+  _createBenches(scene, RAPIER, world, syncList)
+  _createRocks(scene, RAPIER, world, syncList)
   _createFlowerPatches(scene)
-  _createSignposts(scene)
+  _createSignposts(scene, RAPIER, world, syncList)
   _createFence(scene)
-  const treeMeshes = _createTrees(scene)
-  return { treeMeshes }
+  const treeMeshes = _createTrees(scene, RAPIER, world, syncList)
+  return { treeMeshes, syncList }
 }
 
 /* ── Ground ──────────────────────────────────────────────── */
@@ -35,23 +38,23 @@ function _createGround(scene) {
 function _createGroundVariation(scene) {
   // Flat color patches to break up monotony
   const patches = [
-    { x: -8,  z: -12, sx: 6,  sz: 5,  color: '#3d6b4e' },
-    { x: 12,  z: 8,   sx: 7,  sz: 4,  color: '#5a8a5f' },
-    { x: -14, z: 15,  sx: 5,  sz: 6,  color: '#3f6d42' },
-    { x: 8,   z: -8,  sx: 4,  sz: 5,  color: '#567a4a' },
-    { x: -6,  z: 6,   sx: 8,  sz: 3,  color: '#4e8055' },
-    { x: 18,  z: -12, sx: 5,  sz: 4,  color: '#3b6545' },
-    { x: -18, z: -8,  sx: 4,  sz: 5,  color: '#5d8c5a' },
-    { x: 5,   z: 16,  sx: 6,  sz: 4,  color: '#436e48' },
+    { x: -8,  z: -12, sx: 6,  sz: 5,  color: '#2e2e3e' },
+    { x: 12,  z: 8,   sx: 7,  sz: 4,  color: '#353545' },
+    { x: -14, z: 15,  sx: 5,  sz: 6,  color: '#2a2a38' },
+    { x: 8,   z: -8,  sx: 4,  sz: 5,  color: '#323240' },
+    { x: -6,  z: 6,   sx: 8,  sz: 3,  color: '#2f2f3f' },
+    { x: 18,  z: -12, sx: 5,  sz: 4,  color: '#282838' },
+    { x: -18, z: -8,  sx: 4,  sz: 5,  color: '#383848' },
+    { x: 5,   z: 16,  sx: 6,  sz: 4,  color: '#2c2c3c' },
     // Larger distant patches
-    { x: 30,  z: -20, sx: 10, sz: 8,  color: '#3a6344' },
-    { x: -30, z: 25,  sx: 9,  sz: 7,  color: '#548553' },
-    { x: -25, z: -35, sx: 8,  sz: 6,  color: '#4d7d50' },
-    { x: 35,  z: 15,  sx: 7,  sz: 9,  color: '#3e6a47' },
-    // Brown/earthy patches
-    { x: 15,  z: -25, sx: 4,  sz: 3,  color: '#6b7a55' },
-    { x: -22, z: 8,   sx: 3,  sz: 4,  color: '#5e7050' },
-    { x: 10,  z: 28,  sx: 5,  sz: 3,  color: '#6a7a52' },
+    { x: 30,  z: -20, sx: 10, sz: 8,  color: '#262636' },
+    { x: -30, z: 25,  sx: 9,  sz: 7,  color: '#343444' },
+    { x: -25, z: -35, sx: 8,  sz: 6,  color: '#2b2b3b' },
+    { x: 35,  z: 15,  sx: 7,  sz: 9,  color: '#292939' },
+    // Dark alien patches
+    { x: 15,  z: -25, sx: 4,  sz: 3,  color: '#3a3a45' },
+    { x: -22, z: 8,   sx: 3,  sz: 4,  color: '#333340' },
+    { x: 10,  z: 28,  sx: 5,  sz: 3,  color: '#383843' },
   ]
 
   for (const p of patches) {
@@ -77,7 +80,7 @@ function _createGroundVariation(scene) {
     { x: 5,   z: -35, r: 3.0, h: 0.45 },
   ]
 
-  const moundMat = new THREE.MeshStandardMaterial({ color: '#4d7f55', flatShading: true })
+  const moundMat = new THREE.MeshStandardMaterial({ color: '#2a2a3a', flatShading: true })
   for (const m of mounds) {
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(m.r, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -96,33 +99,43 @@ function _createPaths(scene) {
   // Building positions: About (0,-20), Projects (20,0), Contact (0,20), Experience (-20,0)
   // Car spawn at origin (0,0)
 
-  const pathMat = new THREE.MeshStandardMaterial({ color: '#8a7d6b', flatShading: true })
-  const edgeMat = new THREE.MeshStandardMaterial({ color: '#7a6d5b', flatShading: true })
+  const roadMat = new THREE.MeshStandardMaterial({ color: '#2a2a30', flatShading: true })
+  const stripeMat = new THREE.MeshStandardMaterial({ color: '#ffcc00', flatShading: true })
+  const edgeLineMat = new THREE.MeshStandardMaterial({ color: '#cccccc', flatShading: true })
 
-  // Path segments: each defined as { start, end, width }
-  // We build rectangular strips along each path
+  const ROAD_W = 3.0
+  const ROAD_Y = 0.02
+  const MARK_Y = 0.025
+  const DASH_LEN = 1.0
+  const DASH_GAP = 0.8
+  const DASH_W = 0.15
+  const DASH_H = 0.005
+  const EDGE_W = 0.08
+  const EDGE_OFFSET = 1.4 // from center to each edge line
+
+  // Road segments: from origin to each building + perimeter ring road
   const pathDefs = [
-    // Spawn to About (0,0) -> (0,-20): straight north
-    { sx: 0, sz: 0, ex: 0, ez: -17, w: 2.4 },
-    // Spawn to Projects (0,0) -> (20,0): straight east
-    { sx: 0, sz: 0, ex: 17, ez: 0, w: 2.4 },
-    // Spawn to Contact (0,0) -> (0,20): straight south
-    { sx: 0, sz: 0, ex: 0, ez: 17, w: 2.4 },
-    // Spawn to Experience (0,0) -> (-20,0): straight west
-    { sx: 0, sz: 0, ex: -17, ez: 0, w: 2.4 },
-    // Cross paths connecting buildings around the perimeter
-    // About to Projects (0,-20) -> (20,0): diagonal-ish, two segments
-    { sx: 0, sz: -17, ex: 10, ez: -17, w: 1.8 },
-    { sx: 10, sz: -17, ex: 17, ez: -5, w: 1.8 },
-    // Projects to Contact (20,0) -> (0,20)
-    { sx: 17, sz: 5, ex: 17, ez: 12, w: 1.8 },
-    { sx: 17, sz: 12, ex: 5, ez: 17, w: 1.8 },
-    // Contact to Experience (0,20) -> (-20,0)
-    { sx: -5, sz: 17, ex: -17, ez: 12, w: 1.8 },
-    { sx: -17, sz: 12, ex: -17, ez: 5, w: 1.8 },
-    // Experience to About (-20,0) -> (0,-20)
-    { sx: -17, sz: -5, ex: -17, ez: -12, w: 1.8 },
-    { sx: -17, sz: -12, ex: -5, ez: -17, w: 1.8 },
+    // Spawn to About (0,0) -> (0,-20)
+    { sx: 0, sz: 0, ex: 0, ez: -17, w: ROAD_W },
+    // Spawn to Projects (0,0) -> (20,0)
+    { sx: 0, sz: 0, ex: 17, ez: 0, w: ROAD_W },
+    // Spawn to Contact (0,0) -> (0,20)
+    { sx: 0, sz: 0, ex: 0, ez: 17, w: ROAD_W },
+    // Spawn to Experience (0,0) -> (-20,0)
+    { sx: 0, sz: 0, ex: -17, ez: 0, w: ROAD_W },
+    // Perimeter ring road connecting buildings
+    // About to Projects
+    { sx: 0, sz: -17, ex: 10, ez: -17, w: ROAD_W },
+    { sx: 10, sz: -17, ex: 17, ez: -5, w: ROAD_W },
+    // Projects to Contact
+    { sx: 17, sz: 5, ex: 17, ez: 12, w: ROAD_W },
+    { sx: 17, sz: 12, ex: 5, ez: 17, w: ROAD_W },
+    // Contact to Experience
+    { sx: -5, sz: 17, ex: -17, ez: 12, w: ROAD_W },
+    { sx: -17, sz: 12, ex: -17, ez: 5, w: ROAD_W },
+    // Experience to About
+    { sx: -17, sz: -5, ex: -17, ez: -12, w: ROAD_W },
+    { sx: -17, sz: -12, ex: -5, ez: -17, w: ROAD_W },
   ]
 
   for (const p of pathDefs) {
@@ -131,60 +144,109 @@ function _createPaths(scene) {
     const len = Math.sqrt(dx * dx + dz * dz)
     const angle = Math.atan2(dx, dz)
 
-    // Main path surface
-    const pathMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(p.w, 0.06, len),
-      pathMat
+    // --- Asphalt road surface ---
+    const roadMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(p.w, 0.02, len),
+      roadMat
     )
-    pathMesh.position.set(
+    roadMesh.position.set(
       p.sx + dx * 0.5,
-      0.03,
+      ROAD_Y,
       p.sz + dz * 0.5
     )
-    pathMesh.rotation.y = angle
-    pathMesh.receiveShadow = true
-    scene.add(pathMesh)
+    roadMesh.rotation.y = angle
+    roadMesh.receiveShadow = true
+    scene.add(roadMesh)
 
-    // Edge trim strips (slightly darker, flanking the path)
-    const edgeW = 0.2
+    // --- White edge lines (continuous) ---
     for (const side of [-1, 1]) {
-      const offsetX = Math.cos(angle) * (p.w / 2 + edgeW / 2) * side
-      const offsetZ = -Math.sin(angle) * (p.w / 2 + edgeW / 2) * side
-      const edge = new THREE.Mesh(
-        new THREE.BoxGeometry(edgeW, 0.08, len),
-        edgeMat
+      const offsetX = Math.cos(angle) * EDGE_OFFSET * side
+      const offsetZ = -Math.sin(angle) * EDGE_OFFSET * side
+      const edgeLine = new THREE.Mesh(
+        new THREE.BoxGeometry(EDGE_W, DASH_H, len),
+        edgeLineMat
       )
-      edge.position.set(
+      edgeLine.position.set(
         p.sx + dx * 0.5 + offsetX,
-        0.04,
+        MARK_Y,
         p.sz + dz * 0.5 + offsetZ
       )
-      edge.rotation.y = angle
-      edge.receiveShadow = true
-      scene.add(edge)
+      edgeLine.rotation.y = angle
+      edgeLine.receiveShadow = true
+      scene.add(edgeLine)
+    }
+
+    // --- Yellow dashed center stripe ---
+    const dirX = dx / len
+    const dirZ = dz / len
+    const stride = DASH_LEN + DASH_GAP
+    const dashCount = Math.floor(len / stride)
+    const startOffset = (len - dashCount * stride + DASH_GAP) * 0.5 // center the pattern
+
+    for (let i = 0; i < dashCount; i++) {
+      const t = startOffset + DASH_LEN * 0.5 + i * stride
+      const dash = new THREE.Mesh(
+        new THREE.BoxGeometry(DASH_W, DASH_H, DASH_LEN),
+        stripeMat
+      )
+      dash.position.set(
+        p.sx + dirX * t,
+        MARK_Y,
+        p.sz + dirZ * t
+      )
+      dash.rotation.y = angle
+      scene.add(dash)
     }
   }
 
-  // Central roundabout/hub at spawn
-  const hubGeo = new THREE.CylinderGeometry(2.2, 2.2, 0.07, 16)
-  const hubMesh = new THREE.Mesh(hubGeo, pathMat)
-  hubMesh.position.set(0, 0.035, 0)
-  hubMesh.receiveShadow = true
-  scene.add(hubMesh)
-
-  // Inner circle accent
-  const innerHub = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.0, 1.0, 0.08, 12),
-    new THREE.MeshStandardMaterial({ color: '#9a8d7b', flatShading: true })
+  // ── Central Roundabout ──────────────────────────────────
+  // Circular asphalt area
+  const roundaboutRoad = new THREE.Mesh(
+    new THREE.CylinderGeometry(4, 4, 0.02, 24),
+    roadMat
   )
-  innerHub.position.set(0, 0.04, 0)
-  innerHub.receiveShadow = true
-  scene.add(innerHub)
+  roundaboutRoad.position.set(0, ROAD_Y, 0)
+  roundaboutRoad.receiveShadow = true
+  scene.add(roundaboutRoad)
+
+  // Raised center island
+  const islandMat = new THREE.MeshStandardMaterial({ color: '#3a3a40', flatShading: true })
+  const island = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.5, 1.5, 0.15, 24),
+    islandMat
+  )
+  island.position.set(0, 0.075, 0)
+  island.receiveShadow = true
+  scene.add(island)
+
+  // Yellow dashed circular markings around the island
+  const circleRadius = 1.8
+  const circleSegments = 20
+  const arcPerSegment = (Math.PI * 2) / circleSegments
+  const dashArcFraction = 0.6 // 60% dash, 40% gap
+
+  for (let i = 0; i < circleSegments; i++) {
+    const aStart = i * arcPerSegment
+    const aEnd = aStart + arcPerSegment * dashArcFraction
+    const aMid = (aStart + aEnd) * 0.5
+    const arcLen = circleRadius * (aEnd - aStart)
+
+    const cx = Math.cos(aMid) * circleRadius
+    const cz = Math.sin(aMid) * circleRadius
+
+    const dash = new THREE.Mesh(
+      new THREE.BoxGeometry(DASH_W, DASH_H, arcLen),
+      stripeMat
+    )
+    dash.position.set(cx, MARK_Y, cz)
+    dash.rotation.y = -aMid + Math.PI / 2
+    scene.add(dash)
+  }
 }
 
-/* ── Lampposts ───────────────────────────────────────────── */
+/* ── Lampposts (Toppleable) ─────────────────────────────── */
 
-function _createLampposts(scene) {
+function _createLampposts(scene, RAPIER, world, syncList) {
   const positions = [
     { x: 3,   z: -10 },
     { x: -3,  z: -10 },
@@ -252,18 +314,38 @@ function _createLampposts(scene) {
     lamp.position.set(0.5, 3.4, 0)
     group.add(lamp)
 
-    // Point light for local illumination
+    // Point light for local illumination — child of group so it moves with the lamppost
     const light = new THREE.PointLight('#ffcc44', 0.6, 8, 2)
     light.position.set(0.5, 3.3, 0)
     group.add(light)
 
     scene.add(group)
+
+    // Dynamic Rapier body — knockable lamppost
+    const hx = 0.3
+    const hy = 1.9    // half of full pole height (~3.8)
+    const hz = 0.3
+
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(p.x, 0, p.z)
+      .setLinearDamping(0.5)
+      .setAngularDamping(0.8)
+    const body = world.createRigidBody(bodyDesc)
+
+    const colDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+      .setTranslation(0, hy, 0)
+      .setDensity(3.0)
+      .setFriction(0.6)
+      .setRestitution(0.05)
+    world.createCollider(colDesc, body)
+
+    syncList.push({ mesh: group, body })
   }
 }
 
-/* ── Benches ─────────────────────────────────────────────── */
+/* ── Benches (Kickable) ─────────────────────────────────── */
 
-function _createBenches(scene) {
+function _createBenches(scene, RAPIER, world, syncList) {
   // Place benches near buildings, facing outward from center
   const benchDefs = [
     { x: 4,   z: -16, ry: 0 },          // near About
@@ -284,29 +366,29 @@ function _createBenches(scene) {
 
     // Seat
     const seat = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6, 0.08, 0.5),
+      new THREE.BoxGeometry(1.0, 0.06, 0.35),
       woodMat
     )
-    seat.position.y = 0.5
+    seat.position.y = 0.35
     seat.castShadow = true
     group.add(seat)
 
     // Backrest
     const back = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6, 0.5, 0.06),
+      new THREE.BoxGeometry(1.0, 0.35, 0.05),
       woodMat
     )
-    back.position.set(0, 0.8, -0.22)
+    back.position.set(0, 0.56, -0.15)
     back.castShadow = true
     group.add(back)
 
     // Legs (4 metal legs)
-    const legGeo = new THREE.BoxGeometry(0.06, 0.5, 0.06)
+    const legGeo = new THREE.BoxGeometry(0.05, 0.35, 0.05)
     const legPositions = [
-      [-0.65, 0.25, 0.18],
-      [0.65, 0.25, 0.18],
-      [-0.65, 0.25, -0.18],
-      [0.65, 0.25, -0.18],
+      [-0.4, 0.175, 0.12],
+      [0.4, 0.175, 0.12],
+      [-0.4, 0.175, -0.12],
+      [0.4, 0.175, -0.12],
     ]
     for (const [lx, ly, lz] of legPositions) {
       const leg = new THREE.Mesh(legGeo, metalMat)
@@ -318,34 +400,55 @@ function _createBenches(scene) {
     // Armrests
     for (const side of [-1, 1]) {
       const armrest = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.06, 0.5),
+        new THREE.BoxGeometry(0.05, 0.05, 0.35),
         metalMat
       )
-      armrest.position.set(side * 0.75, 0.65, 0)
+      armrest.position.set(side * 0.47, 0.45, 0)
       group.add(armrest)
     }
 
     scene.add(group)
+
+    // Dynamic Rapier body — kickable
+    // Cuboid matching bench bounding box
+    const hx = 0.5
+    const hy = 0.37
+    const hz = 0.18
+
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(b.x, hy, b.z)
+      .setRotation({ x: 0, y: Math.sin(b.ry / 2), z: 0, w: Math.cos(b.ry / 2) })
+      .setLinearDamping(0.4)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bodyDesc)
+
+    const colDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+      .setDensity(5.0)
+      .setFriction(0.6)
+      .setRestitution(0.1)
+    world.createCollider(colDesc, body)
+
+    syncList.push({ mesh: group, body })
   }
 }
 
-/* ── Rocks ───────────────────────────────────────────────── */
+/* ── Rocks (Rollable) ───────────────────────────────────── */
 
-function _createRocks(scene) {
+function _createRocks(scene, RAPIER, world, syncList) {
   const rockDefs = [
-    { x: -7,  z: -5,  s: 0.5, color: '#7a7a78' },
-    { x: 13,  z: -14, s: 0.7, color: '#6b6b68' },
-    { x: -16, z: 8,   s: 0.4, color: '#8a8580' },
-    { x: 9,   z: 12,  s: 0.6, color: '#757570' },
-    { x: -5,  z: 22,  s: 0.5, color: '#6e6e6b' },
-    { x: 22,  z: -6,  s: 0.35,color: '#807c78' },
-    { x: -24, z: -14, s: 0.8, color: '#6b6860' },
-    { x: 28,  z: 10,  s: 0.45,color: '#7c7870' },
-    { x: -12, z: -28, s: 0.6, color: '#858580' },
-    { x: 15,  z: 25,  s: 0.55,color: '#726e68' },
-    { x: -28, z: 18,  s: 0.4, color: '#7a7570' },
-    { x: 6,   z: -28, s: 0.7, color: '#6a6a65' },
-    { x: -18, z: -22, s: 0.35,color: '#8a8a85' },
+    { x: -7,  z: -5,  s: 0.5, color: '#1e1e2e' },
+    { x: 13,  z: -14, s: 0.7, color: '#1a1a2a' },
+    { x: -16, z: 8,   s: 0.4, color: '#252535' },
+    { x: 9,   z: 12,  s: 0.6, color: '#1c1c2c' },
+    { x: -5,  z: 22,  s: 0.5, color: '#1a1a2a' },
+    { x: 22,  z: -6,  s: 0.35,color: '#222232' },
+    { x: -24, z: -14, s: 0.8, color: '#1a1a28' },
+    { x: 28,  z: 10,  s: 0.45,color: '#202030' },
+    { x: -12, z: -28, s: 0.6, color: '#252535' },
+    { x: 15,  z: 25,  s: 0.55,color: '#1b1b2b' },
+    { x: -28, z: 18,  s: 0.4, color: '#1e1e2e' },
+    { x: 6,   z: -28, s: 0.7, color: '#1a1a2a' },
+    { x: -18, z: -22, s: 0.35,color: '#252535' },
   ]
 
   for (const r of rockDefs) {
@@ -362,27 +465,57 @@ function _createRocks(scene) {
     mesh.receiveShadow = true
     scene.add(mesh)
 
-    // Sometimes add a smaller companion rock
+    // Dynamic Rapier body — rollable ball collider
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(r.x, r.s * 0.3, r.z)
+      .setLinearDamping(0.5)
+      .setAngularDamping(0.5)
+    const body = world.createRigidBody(bodyDesc)
+
+    const colDesc = RAPIER.ColliderDesc.ball(r.s)
+      .setDensity(8.0)
+      .setFriction(0.7)
+      .setRestitution(0.1)
+    world.createCollider(colDesc, body)
+
+    syncList.push({ mesh, body })
+
+    // Sometimes add a smaller companion rock (also dynamic)
     if (Math.random() > 0.5) {
+      const companionRadius = r.s * 0.45
       const companion = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(r.s * 0.45, 0),
+        new THREE.IcosahedronGeometry(companionRadius, 0),
         new THREE.MeshStandardMaterial({ color: r.color, flatShading: true })
       )
       companion.scale.y = 0.4 + Math.random() * 0.3
       companion.rotation.y = Math.random() * Math.PI * 2
       const offsetAngle = Math.random() * Math.PI * 2
-      companion.position.set(
-        r.x + Math.cos(offsetAngle) * r.s * 1.2,
-        r.s * 0.15,
-        r.z + Math.sin(offsetAngle) * r.s * 1.2
-      )
+      const cx = r.x + Math.cos(offsetAngle) * r.s * 1.2
+      const cy = r.s * 0.15
+      const cz = r.z + Math.sin(offsetAngle) * r.s * 1.2
+      companion.position.set(cx, cy, cz)
       companion.castShadow = true
       scene.add(companion)
+
+      // Dynamic body for companion rock too
+      const compBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(cx, cy, cz)
+        .setLinearDamping(0.5)
+        .setAngularDamping(0.5)
+      const compBody = world.createRigidBody(compBodyDesc)
+
+      const compColDesc = RAPIER.ColliderDesc.ball(companionRadius)
+        .setDensity(8.0)
+        .setFriction(0.7)
+        .setRestitution(0.1)
+      world.createCollider(compColDesc, compBody)
+
+      syncList.push({ mesh: companion, body: compBody })
     }
   }
 }
 
-/* ── Flower Patches ──────────────────────────────────────── */
+/* ── Flower Patches (STATIC — decorative) ────────────────── */
 
 function _createFlowerPatches(scene) {
   const patchDefs = [
@@ -433,7 +566,7 @@ function _createFlowerPatches(scene) {
     // Small grass base
     const grassBase = new THREE.Mesh(
       new THREE.CylinderGeometry(0.6, 0.7, 0.05, 8),
-      new THREE.MeshStandardMaterial({ color: '#3d7a45', flatShading: true })
+      new THREE.MeshStandardMaterial({ color: '#2a2a3a', flatShading: true })
     )
     grassBase.position.y = 0.025
     grassBase.receiveShadow = true
@@ -443,9 +576,9 @@ function _createFlowerPatches(scene) {
   }
 }
 
-/* ── Signposts ───────────────────────────────────────────── */
+/* ── Signposts (Toppleable) ─────────────────────────────── */
 
-function _createSignposts(scene) {
+function _createSignposts(scene, RAPIER, world, syncList) {
   // Each signpost is a pole with multiple directional arrow signs
   const signposts = [
     {
@@ -471,67 +604,66 @@ function _createSignposts(scene) {
     },
   ]
 
-  const poleMat = new THREE.MeshStandardMaterial({ color: '#5a4a3a', flatShading: true })
+  const poleMat = new THREE.MeshStandardMaterial({ color: '#444444', flatShading: true, metalness: 0.6, roughness: 0.4 })
 
   for (const sp of signposts) {
     const group = new THREE.Group()
     group.position.set(sp.x, 0, sp.z)
 
-    // Pole
+    // Thicker pole
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.08, 2.5, 5),
+      new THREE.CylinderGeometry(0.1, 0.1, 2.5, 6),
       poleMat
     )
     pole.position.y = 1.25
     pole.castShadow = true
     group.add(pole)
 
-    // Arrow signs
+    // Sign boards (clean colored boxes, no separate arrow tips)
     for (const s of sp.signs) {
       const signGroup = new THREE.Group()
       signGroup.position.y = s.y
       signGroup.rotation.y = s.angle
 
-      // Sign board (arrow-shaped: box + triangle)
       const board = new THREE.Mesh(
-        new THREE.BoxGeometry(1.2, 0.3, 0.06),
+        new THREE.BoxGeometry(1.5, 0.4, 0.06),
         new THREE.MeshStandardMaterial({ color: s.color, flatShading: true })
       )
-      board.position.z = 0.6
+      board.position.z = 0.75
       board.castShadow = true
       signGroup.add(board)
-
-      // Arrow tip (triangle pointing outward)
-      const arrowShape = new THREE.Shape()
-      arrowShape.moveTo(0, 0.2)
-      arrowShape.lineTo(0.2, 0)
-      arrowShape.lineTo(0, -0.2)
-      arrowShape.lineTo(0, 0.2)
-      const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, { depth: 0.06, bevelEnabled: false })
-      const arrow = new THREE.Mesh(
-        arrowGeo,
-        new THREE.MeshStandardMaterial({ color: s.color, flatShading: true })
-      )
-      arrow.position.set(0, 0, 1.2)
-      arrow.rotation.y = Math.PI / 2
-      signGroup.add(arrow)
 
       group.add(signGroup)
     }
 
-    // Decorative cap on top of pole
+    // Small sphere cap on top of pole
     const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.1, 5, 3),
+      new THREE.SphereGeometry(0.14, 6, 4),
       poleMat
     )
     cap.position.y = 2.55
     group.add(cap)
 
     scene.add(group)
+
+    // Fixed Rapier body — signposts are directional signs, they don't topple
+    // Cuboid collider so the car bounces off
+    const hx = 0.3
+    const hy = 1.35
+    const hz = 0.3
+
+    const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(sp.x, hy, sp.z)
+    const body = world.createRigidBody(bodyDesc)
+
+    const colDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+      .setFriction(0.5)
+      .setRestitution(0.1)
+    world.createCollider(colDesc, body)
   }
 }
 
-/* ── Perimeter Fence ─────────────────────────────────────── */
+/* ── Perimeter Fence (STATIC — boundary) ─────────────────── */
 
 function _createFence(scene) {
   // Low stone wall around the main play area (roughly ±40 perimeter)
@@ -541,8 +673,8 @@ function _createFence(scene) {
   const segmentLen = 3.0
   const gapBetween = 0.15
 
-  const stoneMat = new THREE.MeshStandardMaterial({ color: '#8a8278', flatShading: true })
-  const stoneTopMat = new THREE.MeshStandardMaterial({ color: '#9a928a', flatShading: true })
+  const stoneMat = new THREE.MeshStandardMaterial({ color: '#2a2a3a', flatShading: true })
+  const stoneTopMat = new THREE.MeshStandardMaterial({ color: '#353545', flatShading: true })
 
   // Build walls on each side, leaving gaps at path intersections
   const sides = [
@@ -633,9 +765,9 @@ function _createFence(scene) {
   }
 }
 
-/* ── Trees (original) ────────────────────────────────────── */
+/* ── Trees (Toppleable) ─────────────────────────────────── */
 
-function _createTrees(scene) {
+function _createTrees(scene, RAPIER, world, syncList) {
   // All 28 positions from Scene.tsx — exact values
   const treePositions = [
     [-15, 0, -20], [20, 0, -15], [-25, 0, 10], [18, 0, 25],
@@ -681,6 +813,28 @@ function _createTrees(scene) {
 
     scene.add(group)
     treeMeshes.push({ mesh: group, scale })
+
+    // Dynamic Rapier body — toppleable tree collider
+    // Cuboid covers full tree bounding box (trunk + foliage), scaled
+    const hx = 0.8 * scale    // covers widest foliage
+    const hy = 2.5 * scale    // covers trunk + foliage
+    const hz = 0.8 * scale
+    const bodyY = hy           // center of full tree
+
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(x, 0, z)
+      .setLinearDamping(1.0)
+      .setAngularDamping(2.0)
+    const body = world.createRigidBody(bodyDesc)
+
+    const colDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+      .setTranslation(0, hy, 0)
+      .setDensity(1.5)
+      .setFriction(0.5)
+      .setRestitution(0.05)
+    world.createCollider(colDesc, body)
+
+    syncList.push({ mesh: group, body })
   })
 
   return treeMeshes

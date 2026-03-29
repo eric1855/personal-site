@@ -214,9 +214,11 @@ function _shadow(mesh) {
 }
 
 // ── About: Cozy house/cabin with pitched roof, chimney, porch ──
-function _buildAbout(def) {
+function _buildAbout(def, scene, RAPIER, world, syncList) {
   const group = new THREE.Group()
   group.position.set(def.position.x, 0, def.position.z)
+  const bx = def.position.x
+  const bz = def.position.z
 
   const mainColor = new THREE.Color(def.color)
   const wallMat = new THREE.MeshStandardMaterial({ color: mainColor, flatShading: true })
@@ -325,17 +327,33 @@ function _buildAbout(def) {
   step1.position.set(0, 0.06, 2.85)
   group.add(step1)
 
-  // ── Props: Potted plants near the front ──
+  // ── Props: Potted plants near the front (dynamic physics) ──
   for (const xOff of [-1.8, 1.8]) {
+    const wx = bx + xOff, wz = bz + 2.6
+    const plantGroup = new THREE.Group()
     // Pot
     const pot = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.35, 8), _brickMat))
-    pot.position.set(xOff, 0.25, 2.6)
-    group.add(pot)
+    pot.position.set(0, 0.25, 0)
+    plantGroup.add(pot)
     // Plant (green sphere)
     const plant = _shadow(new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 5),
       new THREE.MeshStandardMaterial({ color: '#3a8a3a', flatShading: true })))
-    plant.position.set(xOff, 0.6, 2.6)
-    group.add(plant)
+    plant.position.set(0, 0.6, 0)
+    plantGroup.add(plant)
+    plantGroup.position.set(wx, 0, wz)
+    scene.add(plantGroup)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.425, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.2, 0.425, 0.2)
+        .setDensity(3.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: plantGroup, body })
   }
 
   // Welcome mat
@@ -344,22 +362,42 @@ function _buildAbout(def) {
   mat.position.set(0, 0.17, 2.1)
   group.add(mat)
 
-  // Mailbox next to path (small)
-  const mailboxPost = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), _darkWoodMat))
-  mailboxPost.position.set(2.5, 0.45, 2.2)
-  group.add(mailboxPost)
-  const mailboxBox = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.2),
-    new THREE.MeshStandardMaterial({ color: '#cc3333', flatShading: true })))
-  mailboxBox.position.set(2.5, 0.95, 2.2)
-  group.add(mailboxBox)
+  // Mailbox next to path (dynamic physics — toppleable)
+  {
+    const wx = bx + 2.5, wz = bz + 2.2
+    const mailboxGroup = new THREE.Group()
+    const mailboxPost = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), _darkWoodMat))
+    mailboxPost.position.set(0, 0.45, 0)
+    mailboxGroup.add(mailboxPost)
+    const mailboxBox = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.2),
+      new THREE.MeshStandardMaterial({ color: '#cc3333', flatShading: true })))
+    mailboxBox.position.set(0, 0.95, 0)
+    mailboxGroup.add(mailboxBox)
+    mailboxGroup.position.set(wx, 0, wz)
+    scene.add(mailboxGroup)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.525, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.15, 0.525, 0.1)
+        .setDensity(3.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: mailboxGroup, body })
+  }
 
   return group
 }
 
 // ── Projects: Workshop/factory with sawtooth roof, garage door, smokestacks ──
-function _buildProjects(def) {
+function _buildProjects(def, scene, RAPIER, world, syncList) {
   const group = new THREE.Group()
   group.position.set(def.position.x, 0, def.position.z)
+  const bx = def.position.x
+  const bz = def.position.z
 
   const mainColor = new THREE.Color(def.color)
   const wallMat = new THREE.MeshStandardMaterial({ color: mainColor, flatShading: true })
@@ -439,21 +477,51 @@ function _buildProjects(def) {
     group.add(cap)
   }
 
-  // ── Props: Gears/cogs near the building ──
+  // ── Props: Gears/cogs near the building (dynamic physics) ──
   // Large gear (torus)
-  const gearGeo = new THREE.TorusGeometry(0.4, 0.08, 6, 12)
-  const gear1 = _shadow(new THREE.Mesh(gearGeo, _metalMat))
-  gear1.position.set(-3.2, 0.5, 1.5)
-  gear1.rotation.x = Math.PI * 0.5
-  group.add(gear1)
+  {
+    const wx = bx + -3.2, wy = 0.5, wz = bz + 1.5
+    const gearGeo = new THREE.TorusGeometry(0.4, 0.08, 6, 12)
+    const gear1 = _shadow(new THREE.Mesh(gearGeo, _metalMat))
+    gear1.rotation.x = Math.PI * 0.5
+    gear1.position.set(wx, wy, wz)
+    scene.add(gear1)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, wy, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cylinder(0.08, 0.4)
+        .setDensity(8.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: gear1, body })
+  }
 
   // Smaller gear
-  const gear2 = _shadow(new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.06, 6, 10), _metalMat))
-  gear2.position.set(-3.2, 0.5, 0.8)
-  gear2.rotation.x = Math.PI * 0.5
-  group.add(gear2)
+  {
+    const wx = bx + -3.2, wy = 0.5, wz = bz + 0.8
+    const gear2 = _shadow(new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.06, 6, 10), _metalMat))
+    gear2.rotation.x = Math.PI * 0.5
+    gear2.position.set(wx, wy, wz)
+    scene.add(gear2)
 
-  // Tool bench
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, wy, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cylinder(0.06, 0.25)
+        .setDensity(8.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: gear2, body })
+  }
+
+  // Tool bench (static — part of building)
   const bench = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.6), _darkWoodMat))
   bench.position.set(-3.2, 0.8, 0.0)
   group.add(bench)
@@ -464,28 +532,77 @@ function _buildProjects(def) {
     group.add(leg)
   }
 
-  // Barrel
-  const barrel = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.28, 0.7, 10),
-    new THREE.MeshStandardMaterial({ color: '#6a4a2a', flatShading: true })))
-  barrel.position.set(3.3, 0.35, 1.0)
-  group.add(barrel)
+  // Barrel (dynamic physics — rollable)
+  {
+    const wx = bx + 3.3, wy = 0.35, wz = bz + 1.0
+    const barrel = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.28, 0.7, 10),
+      new THREE.MeshStandardMaterial({ color: '#6a4a2a', flatShading: true })))
+    barrel.position.set(wx, wy, wz)
+    scene.add(barrel)
 
-  // Stack of crates
-  const crateMat = new THREE.MeshStandardMaterial({ color: '#a08050', flatShading: true })
-  const crate1 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), crateMat))
-  crate1.position.set(3.3, 0.3, -0.5)
-  group.add(crate1)
-  const crate2 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), crateMat))
-  crate2.position.set(3.3, 0.85, -0.5)
-  group.add(crate2)
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, wy, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cylinder(0.35, 0.3)
+        .setDensity(5.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: barrel, body })
+  }
+
+  // Stack of crates (dynamic physics — pushable)
+  {
+    const crateMat = new THREE.MeshStandardMaterial({ color: '#a08050', flatShading: true })
+
+    // Bottom crate
+    const wx1 = bx + 3.3, wy1 = 0.3, wz1 = bz + -0.5
+    const crate1 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), crateMat))
+    crate1.position.set(wx1, wy1, wz1)
+    scene.add(crate1)
+
+    const bd1 = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx1, wy1, wz1)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body1 = world.createRigidBody(bd1)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.3, 0.3, 0.3)
+        .setDensity(5.0).setFriction(0.5).setRestitution(0.1),
+      body1
+    )
+    syncList.push({ mesh: crate1, body: body1 })
+
+    // Top crate
+    const wx2 = bx + 3.3, wy2 = 0.85, wz2 = bz + -0.5
+    const crate2 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), crateMat))
+    crate2.position.set(wx2, wy2, wz2)
+    scene.add(crate2)
+
+    const bd2 = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx2, wy2, wz2)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body2 = world.createRigidBody(bd2)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.25, 0.25, 0.25)
+        .setDensity(5.0).setFriction(0.5).setRestitution(0.1),
+      body2
+    )
+    syncList.push({ mesh: crate2, body: body2 })
+  }
 
   return group
 }
 
 // ── Experience: Office tower — tall, multi-floor windows, rooftop antenna ──
-function _buildExperience(def) {
+function _buildExperience(def, scene, RAPIER, world, syncList) {
   const group = new THREE.Group()
   group.position.set(def.position.x, 0, def.position.z)
+  const bx = def.position.x
+  const bz = def.position.z
 
   const mainColor = new THREE.Color(def.color)
   const wallMat = new THREE.MeshStandardMaterial({ color: mainColor, flatShading: true })
@@ -604,26 +721,62 @@ function _buildExperience(def) {
   light.position.set(0, 8.4, 0)
   group.add(light)
 
-  // ── Props: Briefcase, office plant ──
+  // ── Props: Briefcase, office plant (dynamic physics) ──
   // Potted plant at entrance
-  const pot = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.4, 8),
-    new THREE.MeshStandardMaterial({ color: '#555555', flatShading: true })))
-  pot.position.set(-1.0, 0.2, 2.0)
-  group.add(pot)
-  const plantLeaves = _shadow(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 7),
-    new THREE.MeshStandardMaterial({ color: '#2d7a2d', flatShading: true })))
-  plantLeaves.position.set(-1.0, 0.75, 2.0)
-  group.add(plantLeaves)
+  {
+    const wx = bx + -1.0, wz = bz + 2.0
+    const plantGroup = new THREE.Group()
+    const pot = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.4, 8),
+      new THREE.MeshStandardMaterial({ color: '#555555', flatShading: true })))
+    pot.position.set(0, 0.2, 0)
+    plantGroup.add(pot)
+    const plantLeaves = _shadow(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 7),
+      new THREE.MeshStandardMaterial({ color: '#2d7a2d', flatShading: true })))
+    plantLeaves.position.set(0, 0.75, 0)
+    plantGroup.add(plantLeaves)
+    plantGroup.position.set(wx, 0, wz)
+    scene.add(plantGroup)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.55, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.22, 0.55, 0.22)
+        .setDensity(2.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: plantGroup, body })
+  }
 
   // Briefcase
-  const briefcase = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.1),
-    new THREE.MeshStandardMaterial({ color: '#4a3020', flatShading: true })))
-  briefcase.position.set(1.0, 0.15, 2.0)
-  group.add(briefcase)
-  // Briefcase handle
-  const bcHandle = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 0.04), _metalMat))
-  bcHandle.position.set(1.0, 0.33, 2.0)
-  group.add(bcHandle)
+  {
+    const wx = bx + 1.0, wz = bz + 2.0
+    const bcGroup = new THREE.Group()
+    const briefcase = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.1),
+      new THREE.MeshStandardMaterial({ color: '#4a3020', flatShading: true })))
+    briefcase.position.set(0, 0.15, 0)
+    bcGroup.add(briefcase)
+    // Briefcase handle
+    const bcHandle = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 0.04), _metalMat))
+    bcHandle.position.set(0, 0.33, 0)
+    bcGroup.add(bcHandle)
+    bcGroup.position.set(wx, 0, wz)
+    scene.add(bcGroup)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.18, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.2, 0.18, 0.05)
+        .setDensity(2.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: bcGroup, body })
+  }
 
   // Company sign next to entrance
   const companySign = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.05),
@@ -635,9 +788,11 @@ function _buildExperience(def) {
 }
 
 // ── Contact: Post office / mailbox building with arched entrance, clock ──
-function _buildContact(def) {
+function _buildContact(def, scene, RAPIER, world, syncList) {
   const group = new THREE.Group()
   group.position.set(def.position.x, 0, def.position.z)
+  const bx = def.position.x
+  const bz = def.position.z
 
   const mainColor = new THREE.Color(def.color)
   const wallMat = new THREE.MeshStandardMaterial({ color: mainColor, flatShading: true })
@@ -768,46 +923,97 @@ function _buildContact(def) {
     group.add(capital)
   }
 
-  // ── Props: Large mailbox, letter, bench ──
-  // Standing mailbox
-  const mbPost = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 6), _metalMat))
-  mbPost.position.set(2.8, 0.5, 1.5)
-  group.add(mbPost)
-  const mbBody = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.35),
-    new THREE.MeshStandardMaterial({ color: '#2266bb', flatShading: true })))
-  mbBody.position.set(2.8, 1.28, 1.5)
-  group.add(mbBody)
-  // Rounded top of mailbox
-  const mbTop = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 8, 1, false, 0, Math.PI),
-    new THREE.MeshStandardMaterial({ color: '#2266bb', flatShading: true })))
-  mbTop.position.set(2.8, 1.55, 1.5)
-  mbTop.rotation.set(0, 0, Math.PI / 2)
-  mbTop.rotation.order = 'ZYX'
-  group.add(mbTop)
-  // Mail slot on mailbox
-  const mbSlot = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.15), _darkMat))
-  mbSlot.position.set(2.8, 1.45, 1.69)
-  group.add(mbSlot)
+  // ── Props: Large mailbox, letter, bench (dynamic physics) ──
+  // Standing mailbox (toppleable)
+  {
+    const wx = bx + 2.8, wz = bz + 1.5
+    const mbGroup = new THREE.Group()
+    const mbPost = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 6), _metalMat))
+    mbPost.position.set(0, 0.5, 0)
+    mbGroup.add(mbPost)
+    const mbBody = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.35),
+      new THREE.MeshStandardMaterial({ color: '#2266bb', flatShading: true })))
+    mbBody.position.set(0, 1.28, 0)
+    mbGroup.add(mbBody)
+    // Rounded top of mailbox
+    const mbTop = _shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 8, 1, false, 0, Math.PI),
+      new THREE.MeshStandardMaterial({ color: '#2266bb', flatShading: true })))
+    mbTop.position.set(0, 1.55, 0)
+    mbTop.rotation.set(0, 0, Math.PI / 2)
+    mbTop.rotation.order = 'ZYX'
+    mbGroup.add(mbTop)
+    // Mail slot on mailbox
+    const mbSlot = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.15), _darkMat))
+    mbSlot.position.set(0, 1.45, 0.19)
+    mbGroup.add(mbSlot)
+    mbGroup.position.set(wx, 0, wz)
+    scene.add(mbGroup)
 
-  // Bench to the left of entrance
-  const benchSeat = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.4), _darkWoodMat))
-  benchSeat.position.set(-2.6, 0.5, 1.5)
-  group.add(benchSeat)
-  for (const xo of [-0.5, 0.5]) {
-    const benchLeg = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), _metalMat))
-    benchLeg.position.set(-2.6 + xo, 0.25, 1.5)
-    group.add(benchLeg)
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.875, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.25, 0.875, 0.175)
+        .setDensity(4.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: mbGroup, body })
   }
-  // Bench back
-  const benchBack = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.06), _darkWoodMat))
-  benchBack.position.set(-2.6, 0.8, 1.28)
-  group.add(benchBack)
 
-  // Envelope / letter prop on the ground near entrance
-  const envelope = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.2), _whiteMat))
-  envelope.position.set(0.5, 0.02, 2.3)
-  envelope.rotation.y = 0.3
-  group.add(envelope)
+  // Bench to the left of entrance (kickable)
+  {
+    const wx = bx + -2.6, wz = bz + 1.5
+    const benchGroup = new THREE.Group()
+    const benchSeat = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.4), _darkWoodMat))
+    benchSeat.position.set(0, 0.5, 0)
+    benchGroup.add(benchSeat)
+    for (const xo of [-0.5, 0.5]) {
+      const benchLeg = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), _metalMat))
+      benchLeg.position.set(xo, 0.25, 0)
+      benchGroup.add(benchLeg)
+    }
+    // Bench back
+    const benchBack = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.06), _darkWoodMat))
+    benchBack.position.set(0, 0.8, -0.22)
+    benchGroup.add(benchBack)
+    benchGroup.position.set(wx, 0, wz)
+    scene.add(benchGroup)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.52, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.6, 0.52, 0.2)
+        .setDensity(5.0).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: benchGroup, body })
+  }
+
+  // Envelope / letter prop on the ground near entrance (very light kickable)
+  {
+    const wx = bx + 0.5, wz = bz + 2.3
+    const envelope = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.2), _whiteMat))
+    envelope.position.set(wx, 0.02, wz)
+    envelope.rotation.y = 0.3
+    scene.add(envelope)
+
+    const bd = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(wx, 0.01, wz)
+      .setLinearDamping(0.3)
+      .setAngularDamping(0.4)
+    const body = world.createRigidBody(bd)
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.15, 0.01, 0.1)
+        .setDensity(0.5).setFriction(0.5).setRestitution(0.1),
+      body
+    )
+    syncList.push({ mesh: envelope, body })
+  }
 
   // Steps at entrance
   const step1 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.4), _stoneMat))
@@ -828,14 +1034,15 @@ const _builders = {
   contact: _buildContact,
 }
 
-export function createLocations(scene) {
+export function createLocations(scene, RAPIER, world) {
   const locations = []
+  const syncList = []
   /** Map of location id -> { proceduralGroup, loadedRoot } for model swapping */
   const _meshRefs = {}
 
   for (const def of LOCATION_DEFS) {
     const builder = _builders[def.id] || _buildFallback
-    const proceduralGroup = builder(def)
+    const proceduralGroup = builder(def, scene, RAPIER, world, syncList)
     scene.add(proceduralGroup)
 
     _meshRefs[def.id] = { proceduralGroup, loadedRoot: null }
@@ -910,11 +1117,11 @@ export function createLocations(scene) {
     ref.proceduralGroup.visible = true
   }
 
-  return { locations, useLoadedModel, useProceduralMesh }
+  return { locations, useLoadedModel, useProceduralMesh, syncList }
 }
 
 // Fallback builder (plain box) in case an id doesn't match
-function _buildFallback(def) {
+function _buildFallback(def, scene, RAPIER, world, syncList) {
   const group = new THREE.Group()
   group.position.set(def.position.x, 0, def.position.z)
   const body = _shadow(new THREE.Mesh(

@@ -135,6 +135,90 @@ export function createAtmosphere(scene, buildings) {
   }
 
   // ────────────────────────────────────────────────────────────
+  // 4.  Landmark Glow Effects (Goop Pond & Crater)
+  // ────────────────────────────────────────────────────────────
+
+  // Goop pond glow ring at (30, 0.02, 28)
+  const goopRingGeom = new THREE.RingGeometry(3, 5, 32)
+  const goopRingMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0x00ff88),
+    transparent: true,
+    opacity: 0.1,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+  const goopRingMesh = new THREE.Mesh(goopRingGeom, goopRingMat)
+  goopRingMesh.rotation.x = -Math.PI / 2
+  goopRingMesh.position.set(30, 0.02, 28)
+  scene.add(goopRingMesh)
+
+  // Crater glow ring at (-28, 0.02, 28)
+  const craterRingGeom = new THREE.RingGeometry(6, 9, 32)
+  const craterRingMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0xaa44ff),
+    transparent: true,
+    opacity: 0.065,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+  const craterRingMesh = new THREE.Mesh(craterRingGeom, craterRingMat)
+  craterRingMesh.rotation.x = -Math.PI / 2
+  craterRingMesh.position.set(-28, 0.02, 28)
+  scene.add(craterRingMesh)
+
+  // ────────────────────────────────────────────────────────────
+  // 5.  Extra Ambient Particles above Goop Pond
+  // ────────────────────────────────────────────────────────────
+  const GOOP_PARTICLE_COUNT = 20
+  const goopPositions = new Float32Array(GOOP_PARTICLE_COUNT * 3)
+  const goopColors    = new Float32Array(GOOP_PARTICLE_COUNT * 3)
+  const goopSizes     = new Float32Array(GOOP_PARTICLE_COUNT)
+  const goopPhases    = new Float32Array(GOOP_PARTICLE_COUNT)
+  const goopSpeeds    = new Float32Array(GOOP_PARTICLE_COUNT)
+
+  for (let i = 0; i < GOOP_PARTICLE_COUNT; i++) {
+    // Clustered above the goop pond area (x: 25-35, z: 23-33, y: 0.5-3)
+    goopPositions[i * 3]     = 25 + Math.random() * 10  // x: 25-35
+    goopPositions[i * 3 + 1] = 0.5 + Math.random() * 2.5 // y: 0.5-3
+    goopPositions[i * 3 + 2] = 23 + Math.random() * 10  // z: 23-33
+
+    // Green-ish glow matching the goop pond
+    _color.setHSL(
+      0.38 + Math.random() * 0.08, // hue: green range (0.38-0.46)
+      0.6 + Math.random() * 0.3,   // saturation: 0.6-0.9
+      0.6 + Math.random() * 0.3    // lightness: 0.6-0.9
+    )
+    goopColors[i * 3]     = _color.r
+    goopColors[i * 3 + 1] = _color.g
+    goopColors[i * 3 + 2] = _color.b
+
+    goopSizes[i]  = 1.5 + Math.random() * 2.5
+    goopPhases[i] = Math.random() * Math.PI * 2
+    goopSpeeds[i] = 0.4 + Math.random() * 0.6
+  }
+
+  const goopParticleGeom = new THREE.BufferGeometry()
+  goopParticleGeom.setAttribute('position', new THREE.BufferAttribute(goopPositions, 3))
+  goopParticleGeom.setAttribute('color',    new THREE.BufferAttribute(goopColors, 3))
+  goopParticleGeom.setAttribute('size',     new THREE.BufferAttribute(goopSizes, 1))
+
+  const goopParticleMat = new THREE.PointsMaterial({
+    size: 0.12,
+    sizeAttenuation: true,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+
+  const goopParticleSystem = new THREE.Points(goopParticleGeom, goopParticleMat)
+  goopParticleSystem.frustumCulled = false
+  scene.add(goopParticleSystem)
+
+  // ────────────────────────────────────────────────────────────
   // Update — called every frame
   // ────────────────────────────────────────────────────────────
   let elapsed = 0
@@ -142,7 +226,7 @@ export function createAtmosphere(scene, buildings) {
   function update(dt) {
     elapsed += dt
 
-    // --- Animate particles ---
+    // --- Animate main ambient particles ---
     const posAttr = particleGeom.getAttribute('position')
     const posArr  = posAttr.array
 
@@ -168,6 +252,31 @@ export function createAtmosphere(scene, buildings) {
     }
     posAttr.needsUpdate = true
 
+    // --- Animate goop pond particles ---
+    const goopPosAttr = goopParticleGeom.getAttribute('position')
+    const goopPosArr  = goopPosAttr.array
+
+    for (let i = 0; i < GOOP_PARTICLE_COUNT; i++) {
+      const i3 = i * 3
+      const phase = goopPhases[i]
+      const spd   = goopSpeeds[i]
+
+      // Slow drift upward
+      goopPosArr[i3 + 1] += BASE_DRIFT_SPEED * spd * 0.5 * dt
+
+      // Gentle lateral sway
+      goopPosArr[i3]     += Math.sin(elapsed * 0.4 + phase) * LATERAL_AMPLITUDE * 0.6 * dt
+      goopPosArr[i3 + 2] += Math.cos(elapsed * 0.5 + phase * 1.2) * LATERAL_AMPLITUDE * 0.6 * dt
+
+      // Wrap back into goop pond area when too high
+      if (goopPosArr[i3 + 1] > 3.0) {
+        goopPosArr[i3 + 1] = 0.5
+        goopPosArr[i3]     = 25 + Math.random() * 10
+        goopPosArr[i3 + 2] = 23 + Math.random() * 10
+      }
+    }
+    goopPosAttr.needsUpdate = true
+
     // --- Pulse beacons and rings ---
     // Sinusoidal pulse: opacity oscillates between 0.1 and 0.3
     const pulse = 0.1 + 0.1 * (1 + Math.sin(elapsed * 1.5))  // range: 0.1 to 0.3
@@ -182,6 +291,16 @@ export function createAtmosphere(scene, buildings) {
     for (const ring of rings) {
       ring.mat.opacity = ringPulse
     }
+
+    // --- Pulse goop pond glow ---
+    // Opacity oscillates between 0.05 and 0.15
+    const goopPulse = 0.05 + 0.05 * (1 + Math.sin(elapsed * 1.8))  // range: 0.05 to 0.15
+    goopRingMat.opacity = goopPulse
+
+    // --- Pulse crater glow ---
+    // Opacity oscillates between 0.03 and 0.10
+    const craterPulse = 0.03 + 0.035 * (1 + Math.sin(elapsed * 1.2))  // range: 0.03 to 0.10
+    craterRingMat.opacity = craterPulse
   }
 
   return { update }

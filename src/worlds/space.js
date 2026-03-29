@@ -60,6 +60,9 @@ export function createWorld(scene, RAPIER, world) {
   const warningLights = []
   const geysers = []
   const crystals = []
+  const monolithAnims = []    // crater monolith pulse
+  const goopAnims = []        // goop pond glow
+  const bubbleAnims = []      // goop bubbles
   let elapsed = 0
 
   // ═══════════════════════════════════════════════════════════════════
@@ -380,8 +383,7 @@ export function createWorld(scene, RAPIER, world) {
           new THREE.BoxGeometry(0.1, 0.1, 1.2), mat(YELLOW)
         ))
         hb.position.set(sx * 0.6, 2 + h * 2.5, sz * 0.6)
-        hb.lookAt(new THREE.Vector3(0, 2 + h * 2.5, 0).add(g.position))
-        hb.position.sub(g.position) // undo the group offset
+        hb.lookAt(new THREE.Vector3(0, 2 + h * 2.5, 0))
         g.add(hb)
       }
     }
@@ -413,8 +415,8 @@ export function createWorld(scene, RAPIER, world) {
   // ═══════════════════════════════════════════════════════════════════
   {
     const dishDefs = [
-      { x: -30, z: -35, speed: 0.15 },
-      { x: -28, z: -30, speed: 0.22 },
+      { x: -18, z: -22, speed: 0.15 },
+      { x: -22, z: -18, speed: 0.22 },
       { x: 45,  z: -10, speed: 0.18 },
       { x: 42,  z: -15, speed: 0.12 },
       { x: -15, z: 45,  speed: 0.25 },
@@ -1092,7 +1094,7 @@ export function createWorld(scene, RAPIER, world) {
     const craterDefs = [
       { x: -15, z: -10, r: 3.0 },
       { x: 20,  z: 25,  r: 2.5 },
-      { x: -30, z: 30,  r: 4.0 },
+      { x: -15, z: 42,  r: 4.0 },
       { x: 35,  z: -20, r: 2.8 },
       { x: -50, z: -45, r: 3.5 },
       { x: 50,  z: 45,  r: 2.2 },
@@ -1753,18 +1755,23 @@ export function createWorld(scene, RAPIER, world) {
       { x: -15, z: -8 },
     ]
     for (const b of barrelDefs) {
+      const barrelGroup = new THREE.Group()
+
       const barrelMesh = shadow(new THREE.Mesh(
         new THREE.CylinderGeometry(0.3, 0.35, 0.9, 8), mat(RED)
       ))
-      barrelMesh.position.set(b.x, 0.45, b.z)
-      group.add(barrelMesh)
+      barrelMesh.position.set(0, 0, 0)
+      barrelGroup.add(barrelMesh)
 
       // Band
       const band = shadow(new THREE.Mesh(
         new THREE.CylinderGeometry(0.36, 0.36, 0.1, 8), mat(YELLOW)
       ))
-      band.position.set(b.x, 0.55, b.z)
-      group.add(band)
+      band.position.set(0, 0.1, 0)
+      barrelGroup.add(band)
+
+      barrelGroup.position.set(b.x, 0.45, b.z)
+      group.add(barrelGroup)
 
       const bd = RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(b.x, 0.45, b.z)
@@ -1774,7 +1781,7 @@ export function createWorld(scene, RAPIER, world) {
         RAPIER.ColliderDesc.cylinder(0.45, 0.35)
           .setDensity(5.0).setFriction(0.4).setRestitution(0.2), body
       )
-      syncList.push({ mesh: barrelMesh, body })
+      syncList.push({ mesh: barrelGroup, body })
     }
   }
 
@@ -1930,6 +1937,501 @@ export function createWorld(scene, RAPIER, world) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
+  // LANDMARK 1: MOUNTAIN RANGE (NW corner, centered ~(-32, -34))
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const DARK_ROCK_MAT = mat(0x1e1e2e)
+
+    // --- Tallest peak at (-32, 0, -36): 3 stacked cones ---
+    const peak1Base = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(5, 4, 8), DARK_ROCK_MAT
+    ))
+    peak1Base.position.set(-32, 2, -36)
+    group.add(peak1Base)
+    const peak1Mid = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(3, 3, 8), DARK_ROCK_MAT
+    ))
+    peak1Mid.position.set(-32, 5.5, -36)
+    group.add(peak1Mid)
+    const peak1Top = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(1.5, 3, 8), DARK_ROCK_MAT
+    ))
+    peak1Top.position.set(-32, 8.5, -36)
+    group.add(peak1Top)
+
+    // --- Medium peak at (-28, 0, -32): 2 cones ---
+    const peak2Base = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(4, 3, 8), DARK_ROCK_MAT
+    ))
+    peak2Base.position.set(-28, 1.5, -32)
+    group.add(peak2Base)
+    const peak2Top = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(2, 2.5, 8), DARK_ROCK_MAT
+    ))
+    peak2Top.position.set(-28, 4.25, -32)
+    group.add(peak2Top)
+
+    // --- Small peak at (-36, 0, -33): 2 cones ---
+    const peak3Base = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(3, 2.5, 8), DARK_ROCK_MAT
+    ))
+    peak3Base.position.set(-36, 1.25, -33)
+    group.add(peak3Base)
+    const peak3Top = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(1.5, 2, 8), DARK_ROCK_MAT
+    ))
+    peak3Top.position.set(-36, 3.5, -33)
+    group.add(peak3Top)
+
+    // --- Rocky base boulders ---
+    const boulderGeo = new THREE.DodecahedronGeometry(2, 0)
+    const boulderPositions = [
+      [-30, 0.4, -34], [-34, 0.4, -35], [-29, 0.4, -38], [-35, 0.4, -31]
+    ]
+    for (const [bx, by, bz] of boulderPositions) {
+      const boulder = shadow(new THREE.Mesh(boulderGeo, DARK_ROCK_MAT))
+      boulder.scale.set(1, 0.4, 1)
+      boulder.position.set(bx, by, bz)
+      boulder.rotation.y = Math.random() * Math.PI
+      group.add(boulder)
+    }
+
+    // --- Cave entrance on tallest peak south face ---
+    const cave = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2, 1.8, 1), mat(0x050510)
+    ))
+    cave.position.set(-30, 0.9, -34)
+    group.add(cave)
+
+    // --- Purple emissive crystals flanking cave ---
+    const caveCrystalMat = emissiveMat(0xaa44ff, 0xaa44ff, 0.8)
+    const caveCrystalGeo = new THREE.DodecahedronGeometry(0.4, 0)
+    const caveCrystalDefs = [
+      [-31.2, 0.5, -33.8], [-28.8, 0.5, -34.2], [-30, 1.9, -33.7]
+    ]
+    for (const [cx, cy, cz] of caveCrystalDefs) {
+      const crystal = shadow(new THREE.Mesh(caveCrystalGeo, caveCrystalMat))
+      crystal.position.set(cx, cy, cz)
+      crystal.rotation.set(Math.random() * 0.5, Math.random() * Math.PI, Math.random() * 0.5)
+      group.add(crystal)
+    }
+
+    // --- PointLight inside cave ---
+    const caveLight = new THREE.PointLight(0x00ffff, 0.5, 6)
+    caveLight.position.set(-30, 1.2, -34.3)
+    group.add(caveLight)
+
+    // --- Fixed Rapier colliders at each peak base ---
+    {
+      const bd1 = RAPIER.RigidBodyDesc.fixed().setTranslation(-32, 2, -36)
+      const b1 = world.createRigidBody(bd1)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(5, 2, 5).setFriction(0.5), b1)
+    }
+    {
+      const bd2 = RAPIER.RigidBodyDesc.fixed().setTranslation(-28, 1.5, -32)
+      const b2 = world.createRigidBody(bd2)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(4, 1.5, 4).setFriction(0.5), b2)
+    }
+    {
+      const bd3 = RAPIER.RigidBodyDesc.fixed().setTranslation(-36, 1.25, -33)
+      const b3 = world.createRigidBody(bd3)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(3, 1.25, 3).setFriction(0.5), b3)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // LANDMARK 2: LARGE CRATER at (-28, 28), radius ~8
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const CX = -28, CZ = 28, CR = 8
+
+    // --- Crater rim: 12 box segments arranged in a circle ---
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2
+      const rx = CX + Math.cos(angle) * CR
+      const rz = CZ + Math.sin(angle) * CR
+      const seg = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(3, 0.6, 0.8), mat(DARK_ROCK)
+      ))
+      seg.position.set(rx, 0.3, rz)
+      seg.rotation.y = -angle + Math.PI / 2
+      group.add(seg)
+
+      // Fixed collider per rim segment
+      const halfA = (-angle + Math.PI / 2) * 0.5
+      const rbd = RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(rx, 0.3, rz)
+        .setRotation({ x: 0, y: Math.sin(halfA), z: 0, w: Math.cos(halfA) })
+      const rb = world.createRigidBody(rbd)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(1.5, 0.3, 0.4).setFriction(0.5), rb)
+    }
+
+    // --- Ramp on east side ---
+    const rampMesh = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2, 0.3, 4), mat(DARK_ROCK)
+    ))
+    rampMesh.position.set(CX + CR, 0.0, CZ)
+    rampMesh.rotation.z = -0.15  // slight slope
+    group.add(rampMesh)
+    {
+      // Rotated ramp collider
+      _e.set(-0.0, 0, -0.15)
+      _q.setFromEuler(_e)
+      const rampBd = RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(CX + CR, 0.0, CZ)
+        .setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w })
+      const rampBody = world.createRigidBody(rampBd)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(1, 0.15, 2).setFriction(0.6), rampBody)
+    }
+
+    // --- Inner floor ---
+    const craterFloor = new THREE.Mesh(
+      new THREE.CircleGeometry(7, 16), mat(0x0a0a15)
+    )
+    craterFloor.rotation.x = -Math.PI / 2
+    craterFloor.position.set(CX, -0.2, CZ)
+    group.add(craterFloor)
+
+    // --- Central monolith ---
+    const monolithMat = emissiveMat(0x1a1a2a, 0xaa44ff, 0.5)
+    const monolith = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 3.0, 0.6), monolithMat
+    ))
+    monolith.position.set(CX, 1.5, CZ)
+    group.add(monolith)
+    monolithAnims.push({ material: monolithMat, phase: 0 })
+
+    // --- 5 crystals in a pentagon at r=3 (dynamic, pushable) ---
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2
+      const px = CX + Math.cos(angle) * 3
+      const pz = CZ + Math.sin(angle) * 3
+      const isOdd = i % 2 === 1
+      const cColor = isOdd ? 0x00ffff : 0xaa44ff
+      const cMat = emissiveMat(cColor, cColor, 0.8, { transparent: true, opacity: 0.7 })
+      const cMesh = shadow(new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.3, 0), cMat
+      ))
+      cMesh.scale.set(0.5, 1.2, 0.5)
+      cMesh.position.set(px, 0.4, pz)
+      group.add(cMesh)
+
+      const cbd = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(px, 0.4, pz)
+        .setLinearDamping(0.3).setAngularDamping(0.4)
+      const cBody = world.createRigidBody(cbd)
+      world.createCollider(
+        RAPIER.ColliderDesc.ball(0.35)
+          .setDensity(1.5).setFriction(0.3).setRestitution(0.4), cBody
+      )
+      syncList.push({ mesh: cMesh, body: cBody })
+    }
+
+    // --- 3 concentric floor rings ---
+    const ringRadii = [[2, 2.3], [3.8, 4.1], [5.5, 5.8]]
+    const ringMat = emissiveMat(0x00ffff, 0x00ffff, 0.3, { transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+    for (const [inner, outer] of ringRadii) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(inner, outer, 32), ringMat
+      )
+      ring.rotation.x = -Math.PI / 2
+      ring.position.set(CX, -0.18, CZ)
+      group.add(ring)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // LANDMARK 3: GOOP POND at (30, 28)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const goopMat = new THREE.MeshStandardMaterial({
+      color: 0x0a2a2a,
+      emissive: 0x00ff88,
+      emissiveIntensity: 0.4,
+      flatShading: true,
+      transparent: true,
+      opacity: 0.75,
+      side: THREE.DoubleSide,
+    })
+    goopAnims.push({ material: goopMat, phase: 0 })
+
+    // --- 3 overlapping circles for irregular shape ---
+    const pondDefs = [
+      { x: 30, z: 28, r: 4 },
+      { x: 32, z: 26, r: 2.5 },
+      { x: 28, z: 30, r: 2 },
+    ]
+    for (const p of pondDefs) {
+      const pond = new THREE.Mesh(
+        new THREE.CircleGeometry(p.r, 16), goopMat
+      )
+      pond.rotation.x = -Math.PI / 2
+      pond.position.set(p.x, 0.02, p.z)
+      group.add(pond)
+    }
+
+    // --- Shoreline rocks ---
+    const shoreRockGeo = new THREE.DodecahedronGeometry(1, 0)
+    const shoreRockPositions = [
+      [26.5, 0.15, 28.5, 0.35],
+      [30, 0.15, 32.2, 0.4],
+      [34, 0.15, 25.5, 0.3],
+      [33.5, 0.15, 28, 0.5],
+      [27.5, 0.15, 30.5, 0.4],
+      [29, 0.15, 24.5, 0.35],
+    ]
+    for (const [sx, sy, sz, ss] of shoreRockPositions) {
+      const rock = shadow(new THREE.Mesh(shoreRockGeo, mat(DARK_ROCK)))
+      rock.scale.set(ss, ss * 0.6, ss)
+      rock.position.set(sx, sy, sz)
+      rock.rotation.y = Math.random() * Math.PI
+      group.add(rock)
+    }
+
+    // --- Goo splatter patches ---
+    const splatMat = new THREE.MeshStandardMaterial({
+      color: 0x0a2a2a,
+      emissive: 0x00ff88,
+      emissiveIntensity: 0.4,
+      flatShading: true,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide,
+    })
+    goopAnims.push({ material: splatMat, phase: 1.0 })
+    const splatDefs = [
+      { x: 26, z: 27, r: 0.8 },
+      { x: 34.5, z: 27.5, r: 0.6 },
+      { x: 29, z: 32, r: 1.0 },
+      { x: 31, z: 23.5, r: 0.5 },
+    ]
+    for (const sp of splatDefs) {
+      const splat = new THREE.Mesh(
+        new THREE.CircleGeometry(sp.r, 10), splatMat
+      )
+      splat.rotation.x = -Math.PI / 2
+      splat.position.set(sp.x, 0.02, sp.z)
+      group.add(splat)
+    }
+
+    // --- Bubble animation: 6 small spheres ---
+    const bubbleMat = emissiveMat(0x00ff88, 0x00ff88, 0.6, { transparent: true, opacity: 0.5 })
+    const bubbleDefs = [
+      { x: 30, z: 28 }, { x: 31, z: 27 }, { x: 29, z: 29 },
+      { x: 32, z: 26.5 }, { x: 28.5, z: 29.5 }, { x: 30.5, z: 28.5 },
+    ]
+    for (let i = 0; i < bubbleDefs.length; i++) {
+      const bd = bubbleDefs[i]
+      const bubble = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 6, 6), bubbleMat
+      )
+      bubble.position.set(bd.x, 0.02, bd.z)
+      group.add(bubble)
+      bubbleAnims.push({
+        mesh: bubble,
+        baseX: bd.x,
+        baseZ: bd.z,
+        phase: (i / bubbleDefs.length) * Math.PI * 2,
+        speed: 0.4 + Math.random() * 0.3,
+      })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // LANDMARK 4: RESEARCH STATION at (28, -30)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const RSX = 28, RSZ = -30
+
+    // --- Main lab ---
+    const lab = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(5, 3, 4), mat(STEEL)
+    ))
+    lab.position.set(RSX, 1.5, RSZ)
+    group.add(lab)
+
+    // Cyan emissive window strips on front face
+    const winMat = emissiveMat(0x00ffff, 0x00ffff, 0.5)
+    const win1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 0.05), winMat)
+    win1.position.set(RSX - 1, 2.0, RSZ + 2.01)
+    group.add(win1)
+    const win2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 0.05), winMat)
+    win2.position.set(RSX + 1, 2.0, RSZ + 2.01)
+    group.add(win2)
+
+    // --- Observation dome ---
+    const domeBaseGeo = new THREE.CylinderGeometry(2, 2, 0.5, 16)
+    const domeBase = shadow(new THREE.Mesh(domeBaseGeo, mat(STEEL)))
+    domeBase.position.set(33, 0.25, -28)
+    group.add(domeBase)
+
+    const domeGeo = new THREE.SphereGeometry(2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+    const domeMesh = new THREE.Mesh(domeGeo, mat(LIGHT_BLUE, { transparent: true, opacity: 0.25 }))
+    domeMesh.position.set(33, 0.5, -28)
+    group.add(domeMesh)
+
+    // --- Equipment shed ---
+    const shed = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2, 2, 2), mat(DARK_GRAY)
+    ))
+    shed.position.set(25, 1, -33)
+    group.add(shed)
+
+    // --- Antenna ---
+    const antMast = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.06, 5, 6), mat(STEEL)
+    ))
+    antMast.position.set(30, 2.5, -33)
+    group.add(antMast)
+    // 2 horizontal crossbars
+    const crossbar1 = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 1.5, 4), mat(SILVER)
+    ))
+    crossbar1.position.set(30, 3.5, -33)
+    crossbar1.rotation.z = Math.PI / 2
+    group.add(crossbar1)
+    const crossbar2 = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 1.0, 4), mat(SILVER)
+    ))
+    crossbar2.position.set(30, 4.5, -33)
+    crossbar2.rotation.z = Math.PI / 2
+    group.add(crossbar2)
+
+    // --- 2 PointLights on lab corners ---
+    const labLight1 = new THREE.PointLight(0x00ffff, 0.4, 8)
+    labLight1.position.set(RSX - 2.5, 3.2, RSZ + 2)
+    group.add(labLight1)
+    const labLight2 = new THREE.PointLight(0x00ffff, 0.4, 8)
+    labLight2.position.set(RSX + 2.5, 3.2, RSZ + 2)
+    group.add(labLight2)
+
+    // --- Connecting walkway from lab to dome ---
+    const walkway = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.1, 6), mat(STEEL)
+    ))
+    // Position between lab (28,-30) and dome (33,-28)
+    walkway.position.set(30.5, 0.05, -29)
+    walkway.rotation.y = Math.atan2(33 - 28, -28 - (-30))
+    group.add(walkway)
+
+    // --- Fixed Rapier colliders ---
+    {
+      // Lab
+      const labBd = RAPIER.RigidBodyDesc.fixed().setTranslation(RSX, 1.5, RSZ)
+      const labBody = world.createRigidBody(labBd)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(2.5, 1.5, 2).setFriction(0.5), labBody)
+    }
+    {
+      // Dome base
+      const domeBd = RAPIER.RigidBodyDesc.fixed().setTranslation(33, 1, -28)
+      const domeBody = world.createRigidBody(domeBd)
+      world.createCollider(RAPIER.ColliderDesc.cylinder(1, 2).setFriction(0.5), domeBody)
+    }
+    {
+      // Shed
+      const shedBd = RAPIER.RigidBodyDesc.fixed().setTranslation(25, 1, -33)
+      const shedBody = world.createRigidBody(shedBd)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(1, 1, 1).setFriction(0.5), shedBody)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // LANDMARK 5: ABANDONED LUNAR ROVER at (24, -15)
+  // ═══════════════════════════════════════════════════════════════════
+  {
+    const roverGroup = new THREE.Group()
+    roverGroup.position.set(24, 0, -15)
+    roverGroup.rotation.y = 0.4
+    roverGroup.rotation.z = 0.05  // tilted
+
+    // --- Chassis ---
+    const chassis = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2.5, 0.8, 3.5), mat(SILVER)
+    ))
+    chassis.position.y = 0.6
+    roverGroup.add(chassis)
+
+    // --- 6 wheels in 3 pairs ---
+    const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 8)
+    const wheelMat = mat(DARK_GRAY)
+    const wheelPositions = [
+      // [x, y, z] — left side then right side, front to back
+      [-1.4, 0.3, -1.2],  // front-left (sunk)
+      [1.4,  0.5, -1.2],  // front-right
+      [-1.4, 0.5, 0],     // mid-left
+      [1.4,  0.5, 0],     // mid-right
+      [-1.4, 0.5, 1.2],   // rear-left
+      [1.4,  0.5, 1.2],   // rear-right
+    ]
+    for (const [wx, wy, wz] of wheelPositions) {
+      const wheel = shadow(new THREE.Mesh(wheelGeo, wheelMat))
+      wheel.position.set(wx, wy, wz)
+      wheel.rotation.z = Math.PI / 2
+      roverGroup.add(wheel)
+    }
+
+    // --- Roll cage: 2 arched bars ---
+    for (let s = -1; s <= 1; s += 2) {
+      const bar = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, 2.5, 6), mat(STEEL)
+      ))
+      bar.position.set(s * 0.8, 1.4, 0)
+      bar.rotation.z = s * 0.3
+      bar.rotation.x = 0.15
+      roverGroup.add(bar)
+    }
+
+    // --- Antenna dish: mast + inverted cone ---
+    const antMast = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 2, 6), mat(STEEL)
+    ))
+    antMast.position.set(-0.8, 1.6, -1.5)
+    roverGroup.add(antMast)
+    const antDish = shadow(new THREE.Mesh(
+      new THREE.ConeGeometry(0.4, 0.3, 8), mat(WHITE)
+    ))
+    antDish.position.set(-0.8, 2.7, -1.5)
+    antDish.rotation.x = Math.PI  // inverted
+    roverGroup.add(antDish)
+
+    // --- Solar panel on short arm ---
+    const panelArm = shadow(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.03, 1.2, 4), mat(STEEL)
+    ))
+    panelArm.position.set(0.8, 1.3, -1.0)
+    panelArm.rotation.z = Math.PI / 2
+    roverGroup.add(panelArm)
+    const solarPanel = shadow(new THREE.Mesh(
+      new THREE.BoxGeometry(2, 0.04, 1.2), mat(PANEL_BLUE)
+    ))
+    solarPanel.position.set(0.8, 1.5, -1.0)
+    roverGroup.add(solarPanel)
+
+    group.add(roverGroup)
+
+    // --- Tire tracks behind rover ---
+    for (let s = -1; s <= 1; s += 2) {
+      const track = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.02, 8), mat(0x222230)
+      ))
+      // Tracks extend behind (positive local Z) at slight offset
+      track.position.set(24 + Math.cos(0.4) * s * 1.2, 0.01, -15 + Math.sin(0.4) * 4 + 4)
+      track.rotation.y = 0.4
+      group.add(track)
+    }
+
+    // --- Fixed Rapier cuboid collider around chassis ---
+    {
+      const halfA = 0.4 * 0.5
+      const roverBd = RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(24, 0.6, -15)
+        .setRotation({ x: 0, y: Math.sin(halfA), z: 0, w: Math.cos(halfA) })
+      const roverBody = world.createRigidBody(roverBd)
+      world.createCollider(RAPIER.ColliderDesc.cuboid(1.25, 0.5, 1.75).setFriction(0.5), roverBody)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   // ADD EVERYTHING TO SCENE
   // ═══════════════════════════════════════════════════════════════════
   scene.add(group)
@@ -1974,6 +2476,28 @@ export function createWorld(scene, RAPIER, world) {
       for (const c of crystals) {
         const cPulse = (Math.sin(elapsed * 1.5 + c.phase) + 1) * 0.5
         c.material.emissiveIntensity = 0.3 + cPulse * 1.0
+      }
+
+      // Crater monolith pulsing (emissive 0.3-0.8)
+      for (const m of monolithAnims) {
+        const mPulse = (Math.sin(elapsed * 2.0 + m.phase) + 1) * 0.5
+        m.material.emissiveIntensity = 0.3 + mPulse * 0.5
+      }
+
+      // Goop pond glow pulsing (emissiveIntensity 0.2-0.6)
+      for (const g of goopAnims) {
+        const gPulse = (Math.sin(elapsed * 1.5 + g.phase) + 1) * 0.5
+        g.material.emissiveIntensity = 0.2 + gPulse * 0.4
+      }
+
+      // Goop bubbles rising
+      for (const b of bubbleAnims) {
+        const cycle = ((elapsed * b.speed + b.phase) % (Math.PI * 2)) / (Math.PI * 2)
+        b.mesh.position.y = 0.02 + cycle * 1.48
+        b.mesh.position.x = b.baseX + Math.sin(elapsed * 1.5 + b.phase) * 0.15
+        b.mesh.position.z = b.baseZ + Math.cos(elapsed * 1.2 + b.phase) * 0.15
+        b.mesh.material.opacity = 0.5 * (1 - cycle * 0.7)
+        b.mesh.scale.setScalar(0.8 + cycle * 0.4)
       }
     },
   }

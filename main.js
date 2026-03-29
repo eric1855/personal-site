@@ -9,6 +9,8 @@ import { createPhysicsEngine }  from './src/physics/engine.js'
 import { createColliderWorld }  from './src/physics/colliders.js'
 import { createCar }            from './src/entities/car.js'
 import { createLocations }      from './src/entities/locations.js'
+import { createWorldObjects }   from './src/entities/worldObjects.js'
+import { createInteractables }  from './src/entities/interactables.js'
 import { createUI }             from './src/ui/ui.js'
 import { createPopup }          from './src/ui/popup.js'
 import { createWorld }          from './src/worlds/space.js'
@@ -21,6 +23,7 @@ import { initAudio, updateAudioEngine, playCollisionSound, playPopupOpenSound, p
 import { initLoaders }          from './src/core/assetLoader.js'
 import { initQuality, updateQuality } from './src/core/quality.js'
 import { createAtmosphere }           from './src/effects/atmosphere.js'
+import { createGrass }                from './src/effects/grass.js'
 
 // ── Boot — Rapier WASM must be initialised before anything else ───
 const MIN_DISPLAY_MS = 3000
@@ -44,8 +47,14 @@ createEnvironment(renderer, scene)
 const { keys } = createInput()
 
 // ── Portfolio buildings (constant across all worlds) ─────────────
-const { locations }  = createLocations(scene)
+const { locations, syncList: locationSyncList }  = createLocations(scene, RAPIER, world)
 createLabels(scene, locations)
+
+// ── World objects (ground, trees, paths, lampposts, rocks, etc.) ──
+const { syncList: worldObjSyncList } = createWorldObjects(scene, RAPIER, world)
+
+// ── Grass system (instanced blades + treadmarks) ──────────────────
+const { update: updateGrass } = createGrass(scene)
 
 // ── Atmospheric effects (particles, building glow, ground rings) ──
 const { update: updateAtmosphere } = createAtmosphere(scene, locations)
@@ -63,6 +72,12 @@ const { syncList: worldSyncList, update: updateWorld } = createWorld(scene, RAPI
 // ── Name blocks + "IN PROGRESS" sign near spawn ─────────────
 const { syncList: nameSyncList } = createNameBlocks(scene, RAPIER, world)
 worldSyncList.push(...nameSyncList)
+worldSyncList.push(...worldObjSyncList)
+worldSyncList.push(...locationSyncList)
+
+// ── Interactive physics objects (bowling pins, cones, crystals, etc.) ──
+const { syncList: interactSyncList } = createInteractables(scene, RAPIER, world)
+worldSyncList.push(...interactSyncList)
 
 // ── HUD + popup ─────────────────────────────────────────────────
 const { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash } = createUI()
@@ -154,6 +169,9 @@ function loop(now) {
 
   // Atmosphere (particles, beacon pulse, ground rings)
   updateAtmosphere(elapsed)
+
+  // Grass (wind sway + treadmarks)
+  updateGrass(carState, elapsed, now / 1000)
 
   if (getCameraMode() === CameraMode.FOLLOW) updateCamera(carState)
   updateQuality(now)
