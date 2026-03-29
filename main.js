@@ -20,6 +20,7 @@ import { initAnimations, playIntroSequence, animatePopupOpen, animatePopupClose,
 import { initAudio, updateAudioEngine, playCollisionSound, playPopupOpenSound, playPopupCloseSound, playProximitySound } from './src/core/audio.js'
 import { initLoaders }          from './src/core/assetLoader.js'
 import { initQuality, updateQuality } from './src/core/quality.js'
+import { createAtmosphere }           from './src/effects/atmosphere.js'
 
 // ── Boot — Rapier WASM must be initialised before anything else ───
 const MIN_DISPLAY_MS = 3000
@@ -46,6 +47,9 @@ const { keys } = createInput()
 const { locations }  = createLocations(scene)
 createLabels(scene, locations)
 
+// ── Atmospheric effects (particles, building glow, ground rings) ──
+const { update: updateAtmosphere } = createAtmosphere(scene, locations)
+
 // ── Car + building colliders ────────────────────────────────────
 const { carBody, carCollider } = createColliderWorld(RAPIER, world)
 
@@ -61,7 +65,7 @@ const { syncList: nameSyncList } = createNameBlocks(scene, RAPIER, world)
 worldSyncList.push(...nameSyncList)
 
 // ── HUD + popup ─────────────────────────────────────────────────
-const { updateProximityPrompt } = createUI()
+const { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash } = createUI()
 const popup = createPopup(() => {
   isPaused = false
   playPopupCloseSound()
@@ -144,6 +148,13 @@ function loop(now) {
     animatePopupOpen(near)
   }
 
+  // HUD updates: speedometer + minimap
+  updateSpeedometer(carState.speed)
+  updateMinimap(carState.position, carState.rotation)
+
+  // Atmosphere (particles, beacon pulse, ground rings)
+  updateAtmosphere(elapsed)
+
   if (getCameraMode() === CameraMode.FOLLOW) updateCamera(carState)
   updateQuality(now)
   composer.render()
@@ -156,18 +167,23 @@ const _remaining = Math.max(0, MIN_DISPLAY_MS - _bootElapsed)
 setTimeout(() => {
   const ls = document.getElementById('loading-screen')
   ls.classList.add('fade-out')
-  playIntroSequence()
-  let started = false
-  const start = () => {
-    if (started) return
-    started = true
+
+  let lsRemoved = false
+  const removeLs = () => {
+    if (lsRemoved) return
+    lsRemoved = true
     ls.remove()
-    loop(performance.now())
   }
   ls.addEventListener('transitionend', (e) => {
-    if (e.propertyName === 'opacity') start()
+    if (e.propertyName === 'opacity') removeLs()
   }, { once: true })
-  setTimeout(start, 1000)
+  setTimeout(removeLs, 1000)
+
+  // Wait for user to dismiss the splash screen, then start the game
+  waitForSplash().then(() => {
+    playIntroSequence()
+    loop(performance.now())
+  })
 }, _remaining)
 
 // ── Helpers ─────────────────────────────────────────────────────

@@ -1,41 +1,47 @@
+/**
+ * Location content popup — glassmorphic panel with scale-up/down animations
+ * and frosted background overlay.
+ */
+
 export function createPopup(onClose) {
   // ── Build DOM ──────────────────────────────────────────────────────────────
 
   const overlay = document.createElement('div')
   overlay.id = 'location-overlay'
   Object.assign(overlay.style, {
-    position:        'fixed',
-    inset:           '0',
-    display:         'flex',
-    alignItems:      'center',
-    justifyContent:  'center',
-    background:      'rgba(0,0,0,0.55)',
-    backdropFilter:  'blur(3px)',
-    webkitBackdropFilter: 'blur(3px)',
-    zIndex:          '1000',
-    opacity:         '0',
-    pointerEvents:   'none',
-    transition:      'opacity 0.18s ease',
+    position:             'fixed',
+    inset:                '0',
+    display:              'flex',
+    alignItems:           'center',
+    justifyContent:       'center',
+    background:           'rgba(0,0,0,0.55)',
+    backdropFilter:       'blur(6px)',
+    webkitBackdropFilter: 'blur(6px)',
+    zIndex:               '1000',
+    opacity:              '0',
+    pointerEvents:        'none',
+    transition:           'opacity 0.25s ease, backdrop-filter 0.25s ease',
   })
 
   const panel = document.createElement('div')
   panel.id = 'location-panel'
   Object.assign(panel.style, {
-    width:           'min(600px, 80vw)',
-    height:          'min(500px, 70vh)',
-    display:         'flex',
-    flexDirection:   'column',
-    background:      'rgba(10,10,20,0.82)',
-    backdropFilter:  'blur(16px)',
+    width:                'min(600px, 80vw)',
+    height:               'min(500px, 70vh)',
+    display:              'flex',
+    flexDirection:        'column',
+    background:           'rgba(10,10,20,0.82)',
+    backdropFilter:       'blur(16px)',
     webkitBackdropFilter: 'blur(16px)',
-    border:          '1px solid rgba(255,255,255,0.18)',
-    borderRadius:    '16px',
-    boxShadow:       '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
-    overflow:        'hidden',
-    fontFamily:      'Arial, sans-serif',
-    color:           '#ffffff',
-    transform:       'translateY(12px)',
-    transition:      'transform 0.18s ease',
+    border:               '1px solid rgba(255,255,255,0.18)',
+    borderRadius:         '16px',
+    boxShadow:            '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
+    overflow:             'hidden',
+    fontFamily:           'Arial, sans-serif',
+    color:                '#ffffff',
+    transform:            'scale(0.85) translateY(16px)',
+    opacity:              '0',
+    transition:           'transform 0.3s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s ease',
   })
 
   // Header
@@ -69,7 +75,7 @@ export function createPopup(onClose) {
   })
 
   const closeBtn = document.createElement('button')
-  closeBtn.textContent = '✕'
+  closeBtn.textContent = '\u2715'
   Object.assign(closeBtn.style, {
     width:        '32px',
     height:       '32px',
@@ -137,15 +143,29 @@ export function createPopup(onClose) {
     const frag = document.createRange().createContextualFragment(location.content)
     body.appendChild(frag)
     body.scrollTop = 0
+
+    // Show overlay
     overlay.style.opacity = '1'
     overlay.style.pointerEvents = 'auto'
-    panel.style.transform = 'translateY(0)'
+
+    // Trigger panel scale-up animation (need a frame for the browser to register the initial state)
+    // Reset to starting state
+    panel.style.transform = 'scale(0.85) translateY(16px)'
+    panel.style.opacity   = '0'
+    // Force reflow then animate to final state
+    void panel.offsetHeight
+    panel.style.transform = 'scale(1) translateY(0)'
+    panel.style.opacity   = '1'
   }
 
   function _close() {
+    // Animate panel out (scale down + fade)
+    panel.style.transform = 'scale(0.9) translateY(12px)'
+    panel.style.opacity   = '0'
+
+    // Fade overlay out
     overlay.style.opacity = '0'
     overlay.style.pointerEvents = 'none'
-    panel.style.transform = 'translateY(12px)'
   }
 
   return { open, close: _close }
