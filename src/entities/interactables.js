@@ -143,9 +143,9 @@ function _createSpheres(group, RAPIER, world, syncList) {
   const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e91e63', '#ff5722']
   const geo = new THREE.SphereGeometry(RADIUS, 12, 8)
 
-  // Position near Contact building (x:0, z:20)
-  const baseX = -5
-  const baseZ = 16
+  // Position in open area (upper-left)
+  const baseX = -15
+  const baseZ = 8
 
   for (let i = 0; i < COUNT; i++) {
     const meshMat = new THREE.MeshStandardMaterial({ color: colors[i % colors.length], flatShading: true })

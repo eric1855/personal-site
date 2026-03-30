@@ -1673,78 +1673,185 @@ export function createWorld(scene, RAPIER, world) {
   // ═══════════════════════════════════════════════════════════════════
   {
     const astroDefs = [
-      { x: 5,   z: -18, rot: 0 },
+      { x: 1.5, z: -17, rot: 0 },       // in front of About Me house
       { x: 18,  z: 5,   rot: -1.5 },
       { x: -5,  z: 18,  rot: Math.PI },
-      { x: 32,  z: -28, rot: 0.5 },
+      { x: -18, z: -5,  rot: 1.5 },      // near Experience building (was at 32,-28 which is too far)
     ]
     for (const a of astroDefs) {
       const ag = new THREE.Group()
       ag.position.set(a.x, 0, a.z)
       ag.rotation.y = a.rot
 
-      // Legs
+      // Legs — thicker with knee joints
       for (let s = -1; s <= 1; s += 2) {
-        const leg = shadow(new THREE.Mesh(
-          new THREE.CylinderGeometry(0.12, 0.14, 0.8, 6), mat(WHITE)
+        // Upper leg
+        const upperLeg = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.14, 0.13, 0.45, 8), mat(WHITE)
         ))
-        leg.position.set(s * 0.18, 0.4, 0)
-        ag.add(leg)
-        // Boots
+        upperLeg.position.set(s * 0.18, 0.58, 0)
+        ag.add(upperLeg)
+        // Knee pad
+        const kneePad = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.12, 0.2), mat(SILVER)
+        ))
+        kneePad.position.set(s * 0.18, 0.38, 0.06)
+        ag.add(kneePad)
+        // Lower leg
+        const lowerLeg = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.13, 0.15, 0.35, 8), mat(WHITE)
+        ))
+        lowerLeg.position.set(s * 0.18, 0.18, 0)
+        ag.add(lowerLeg)
+        // Boots — chunkier
         const boot = shadow(new THREE.Mesh(
-          new THREE.BoxGeometry(0.2, 0.15, 0.3), mat(DARK_GRAY)
+          new THREE.BoxGeometry(0.24, 0.18, 0.35), mat(DARK_GRAY)
         ))
-        boot.position.set(s * 0.18, 0.07, 0.05)
+        boot.position.set(s * 0.18, 0.05, 0.04)
         ag.add(boot)
+        // Boot sole
+        const sole = shadow(new THREE.Mesh(
+          new THREE.BoxGeometry(0.26, 0.04, 0.37), mat(BLACK)
+        ))
+        sole.position.set(s * 0.18, -0.02, 0.04)
+        ag.add(sole)
       }
 
-      // Body
-      const body = shadow(new THREE.Mesh(
-        new THREE.BoxGeometry(0.55, 0.7, 0.35), mat(WHITE)
+      // Body — torso with chest panel
+      const torso = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.75, 0.4), mat(WHITE)
       ))
-      body.position.y = 1.15
-      ag.add(body)
+      torso.position.y = 1.18
+      ag.add(torso)
 
-      // Backpack
+      // Chest control panel
+      const chestPanel = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.25, 0.06), mat(DARK_GRAY)
+      ))
+      chestPanel.position.set(0, 1.2, 0.22)
+      ag.add(chestPanel)
+      // Panel buttons (colored dots)
+      for (let bi = 0; bi < 3; bi++) {
+        const btn = new THREE.Mesh(
+          new THREE.SphereGeometry(0.025, 6, 4),
+          emissiveMat([RED, GREEN_E, LIGHT_BLUE][bi], [RED, GREEN_E, LIGHT_BLUE][bi], 0.8)
+        )
+        btn.position.set(-0.08 + bi * 0.08, 1.25, 0.26)
+        ag.add(btn)
+      }
+
+      // Belt
+      const belt = shadow(new THREE.Mesh(
+        new THREE.BoxGeometry(0.62, 0.08, 0.42), mat(SILVER)
+      ))
+      belt.position.y = 0.82
+      ag.add(belt)
+
+      // Backpack — life support with tubes
       const backpack = shadow(new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.5, 0.2), mat(SILVER)
+        new THREE.BoxGeometry(0.5, 0.55, 0.25), mat(SILVER)
       ))
-      backpack.position.set(0, 1.15, -0.25)
+      backpack.position.set(0, 1.18, -0.3)
       ag.add(backpack)
-
-      // Arms
+      // Backpack details — oxygen tanks
       for (let s = -1; s <= 1; s += 2) {
-        const arm = shadow(new THREE.Mesh(
-          new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6), mat(WHITE)
+        const tank = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.06, 0.06, 0.4, 6), mat(STEEL)
         ))
-        arm.position.set(s * 0.38, 1.1, 0)
-        arm.rotation.z = s * 0.3
-        ag.add(arm)
-        // Gloves
+        tank.position.set(s * 0.14, 1.2, -0.45)
+        ag.add(tank)
+        // Tank cap
+        const cap = shadow(new THREE.Mesh(
+          new THREE.SphereGeometry(0.06, 6, 4), mat(STEEL)
+        ))
+        cap.position.set(s * 0.14, 1.42, -0.45)
+        ag.add(cap)
+      }
+
+      // Arms — with elbow bend
+      for (let s = -1; s <= 1; s += 2) {
+        // Shoulder joint
+        const shoulder = shadow(new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 6, 5), mat(WHITE)
+        ))
+        shoulder.position.set(s * 0.4, 1.4, 0)
+        ag.add(shoulder)
+        // Upper arm
+        const upperArm = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.09, 0.08, 0.35, 6), mat(WHITE)
+        ))
+        upperArm.position.set(s * 0.42, 1.18, 0)
+        upperArm.rotation.z = s * 0.15
+        ag.add(upperArm)
+        // Lower arm
+        const lowerArm = shadow(new THREE.Mesh(
+          new THREE.CylinderGeometry(0.08, 0.08, 0.3, 6), mat(WHITE)
+        ))
+        lowerArm.position.set(s * 0.48, 0.95, 0.08)
+        lowerArm.rotation.z = s * 0.3
+        lowerArm.rotation.x = -0.3
+        ag.add(lowerArm)
+        // Gloves — chunkier
         const glove = shadow(new THREE.Mesh(
-          new THREE.SphereGeometry(0.1, 6, 5), mat(SILVER)
+          new THREE.BoxGeometry(0.12, 0.1, 0.14), mat(SILVER)
         ))
-        glove.position.set(s * 0.5, 0.82, 0)
+        glove.position.set(s * 0.52, 0.8, 0.12)
         ag.add(glove)
       }
 
-      // Head
-      const head = shadow(new THREE.Mesh(
-        new THREE.SphereGeometry(0.22, 8, 6), mat(WHITE)
+      // Head — helmet with more detail
+      const helmet = shadow(new THREE.Mesh(
+        new THREE.SphereGeometry(0.26, 10, 8), mat(WHITE)
       ))
-      head.position.y = 1.72
-      ag.add(head)
+      helmet.position.y = 1.76
+      ag.add(helmet)
 
-      // Visor
+      // Helmet rim (ring around the base)
+      const helmRim = shadow(new THREE.Mesh(
+        new THREE.TorusGeometry(0.24, 0.03, 6, 12), mat(SILVER)
+      ))
+      helmRim.position.y = 1.58
+      helmRim.rotation.x = Math.PI / 2
+      ag.add(helmRim)
+
+      // Visor — golden reflective
       const visor = new THREE.Mesh(
-        new THREE.SphereGeometry(0.18, 8, 6, 0, Math.PI, 0, Math.PI / 2),
-        emissiveMat(0x112244, 0x112244, 0.3)
+        new THREE.SphereGeometry(0.22, 10, 8, 0, Math.PI, 0, Math.PI * 0.55),
+        emissiveMat(0x443300, 0x886600, 0.4, { metalness: 0.8, roughness: 0.1 })
       )
-      visor.position.set(0, 1.72, 0.12)
+      visor.position.set(0, 1.76, 0.1)
       visor.rotation.x = -Math.PI / 2
       ag.add(visor)
 
+      // Antenna on helmet
+      const antenna = shadow(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.015, 0.015, 0.3, 4), mat(STEEL)
+      ))
+      antenna.position.set(0.15, 2.05, -0.05)
+      ag.add(antenna)
+      const antennaTip = new THREE.Mesh(
+        new THREE.SphereGeometry(0.03, 6, 4),
+        emissiveMat(RED, RED, 1.0)
+      )
+      antennaTip.position.set(0.15, 2.22, -0.05)
+      ag.add(antennaTip)
+
+      // Flag patch on arm (small colored rectangle)
+      const flag = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, 0.06, 0.01),
+        new THREE.MeshStandardMaterial({ color: 0xcc3333, flatShading: true })
+      )
+      flag.position.set(-0.35, 1.3, 0.12)
+      ag.add(flag)
+
       group.add(ag)
+
+      // Collider so car can't drive through
+      const astroBd = RAPIER.RigidBodyDesc.fixed().setTranslation(a.x, 1.0, a.z)
+      const astroBody = world.createRigidBody(astroBd)
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(0.35, 1.0, 0.3).setFriction(0.5), astroBody
+      )
     }
   }
 
@@ -2200,16 +2307,16 @@ export function createWorld(scene, RAPIER, world) {
 
     // --- 3 overlapping circles for irregular shape ---
     const pondDefs = [
-      { x: 18, z: 17, r: 4 },
-      { x: 19, z: 16, r: 2.5 },
-      { x: 17, z: 18, r: 2 },
+      { x: 18, z: 17, r: 4, y: 0.03 },
+      { x: 19, z: 16, r: 2.5, y: 0.04 },
+      { x: 17, z: 18, r: 2, y: 0.05 },
     ]
     for (const p of pondDefs) {
       const pond = new THREE.Mesh(
         new THREE.CircleGeometry(p.r, 16), goopMat
       )
       pond.rotation.x = -Math.PI / 2
-      pond.position.set(p.x, 0.02, p.z)
+      pond.position.set(p.x, p.y, p.z)
       group.add(pond)
     }
 
@@ -2253,7 +2360,7 @@ export function createWorld(scene, RAPIER, world) {
         new THREE.CircleGeometry(sp.r, 10), splatMat
       )
       splat.rotation.x = -Math.PI / 2
-      splat.position.set(sp.x, 0.02, sp.z)
+      splat.position.set(sp.x, 0.06, sp.z)
       group.add(splat)
     }
 
@@ -2383,7 +2490,7 @@ export function createWorld(scene, RAPIER, world) {
   // ═══════════════════════════════════════════════════════════════════
   {
     const roverGroup = new THREE.Group()
-    roverGroup.position.set(14, 0, -9)
+    roverGroup.position.set(-12, 0, 12)
     roverGroup.rotation.y = 0.4
     roverGroup.rotation.z = 0.05  // tilted
 
@@ -2458,7 +2565,7 @@ export function createWorld(scene, RAPIER, world) {
         new THREE.BoxGeometry(0.25, 0.02, 8), mat(0x222230)
       ))
       // Tracks extend behind (positive local Z) at slight offset
-      track.position.set(14 + Math.cos(0.4) * s * 1.2, 0.01, -9 + Math.sin(0.4) * 4 + 4)
+      track.position.set(-12 + Math.cos(0.4) * s * 1.2, 0.01, 12 + Math.sin(0.4) * 4 + 4)
       track.rotation.y = 0.4
       group.add(track)
     }
@@ -2467,7 +2574,7 @@ export function createWorld(scene, RAPIER, world) {
     {
       const halfA = 0.4 * 0.5
       const roverBd = RAPIER.RigidBodyDesc.fixed()
-        .setTranslation(14, 0.6, -9)
+        .setTranslation(-12, 0.6, 12)
         .setRotation({ x: 0, y: Math.sin(halfA), z: 0, w: Math.cos(halfA) })
       const roverBody = world.createRigidBody(roverBd)
       world.createCollider(RAPIER.ColliderDesc.cuboid(1.25, 0.5, 1.75).setFriction(0.5), roverBody)

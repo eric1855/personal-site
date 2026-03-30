@@ -64,7 +64,7 @@ For objects that should sit on the ground (trees, lampposts, etc.): body is plac
 ### UI Layers
 - **Loading screen**: CSS-only in `index.html` (animated car driving across road)
 - **Splash/intro**: full-screen overlay, click to dismiss → GSAP camera sweep → game starts
-- **HUD**: minimap (canvas, top-right), speedometer (bottom-left), proximity prompt ("Press E")
+- **HUD**: minimap (canvas, top-right with intro animation: starts large/centered then shrinks to corner after splash), speedometer (bottom-left), proximity prompt ("Press E")
 - **Popup**: scale-up/down content panel with frosted backdrop
 
 ## Key Conventions

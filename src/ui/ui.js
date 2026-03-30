@@ -139,10 +139,12 @@ export function createUI() {
   minimapWrap.id = 'minimap-wrap'
   Object.assign(minimapWrap.style, {
     position:            'fixed',
-    top:                 '20px',
-    right:               '20px',
-    width:               `${MINIMAP_SIZE}px`,
-    height:              `${MINIMAP_SIZE}px`,
+    top:                 '50%',
+    left:                '50%',
+    right:               'auto',
+    width:               `${MINIMAP_SIZE * 2.5}px`,
+    height:              `${MINIMAP_SIZE * 2.5}px`,
+    transform:           'translate(-50%, -50%)',
     borderRadius:        '50%',
     background:          'rgba(10,10,20,0.6)',
     backdropFilter:      'blur(8px)',
@@ -160,6 +162,26 @@ export function createUI() {
   minimapCanvas.style.height = `${MINIMAP_SIZE}px`
   minimapWrap.appendChild(minimapCanvas)
   hud.appendChild(minimapWrap)
+
+  // Minimap label (appears during intro animation)
+  const minimapLabel = document.createElement('div')
+  minimapLabel.textContent = 'NAVIGATE TO BUILDINGS'
+  Object.assign(minimapLabel.style, {
+    position:            'fixed',
+    top:                 'calc(50% + 160px)',
+    left:                '50%',
+    transform:           'translateX(-50%)',
+    fontFamily:          'monospace',
+    fontSize:            '14px',
+    letterSpacing:       '0.15em',
+    color:               'rgba(255,255,255,0.7)',
+    textTransform:       'uppercase',
+    pointerEvents:       'none',
+    transition:          'opacity 0.8s ease',
+    zIndex:              '10',
+  })
+  hud.appendChild(minimapLabel)
+
   const mCtx = minimapCanvas.getContext('2d')
 
   // ─── Splash / Intro screen ────────────────────────────────────────────────
@@ -350,7 +372,21 @@ export function createUI() {
    * Show the splash screen. Returns a Promise that resolves when the user dismisses it.
    */
   function waitForSplash() {
-    return splashDone
+    return splashDone.then(() => {
+      // Animate minimap from large/centered to small/top-right
+      setTimeout(() => {
+        minimapWrap.style.transition = 'all 1.2s cubic-bezier(0.4, 0, 0.2, 1)'
+        minimapWrap.style.top = '20px'
+        minimapWrap.style.right = '20px'
+        minimapWrap.style.left = 'auto'
+        minimapWrap.style.width = `${MINIMAP_SIZE}px`
+        minimapWrap.style.height = `${MINIMAP_SIZE}px`
+        minimapWrap.style.transform = 'none'
+        // Fade out minimap label
+        minimapLabel.style.opacity = '0'
+        setTimeout(() => minimapLabel.remove(), 1000)
+      }, 800)
+    })
   }
 
   return { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash }

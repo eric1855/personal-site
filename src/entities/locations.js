@@ -231,25 +231,31 @@ function _buildAbout(def, scene, RAPIER, world, syncList) {
   body.position.y = 1.75
   group.add(body)
 
+  // Foundation
+  const foundation = _shadow(new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.2, 3.4),
+    new THREE.MeshStandardMaterial({ color: '#555566', flatShading: true })))
+  foundation.position.y = 0.1
+  group.add(foundation)
+
   // Pitched roof (triangular prism via ExtrudeGeometry)
   const roofShape = new THREE.Shape()
   roofShape.moveTo(-2.3, 0)
   roofShape.lineTo(0, 2.0)
   roofShape.lineTo(2.3, 0)
   roofShape.lineTo(-2.3, 0)
-  const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: 3.4, bevelEnabled: false })
+  const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: 3.0, bevelEnabled: false })
   const roof = _shadow(new THREE.Mesh(roofGeo, roofMat))
-  roof.position.set(0, 3.5, -1.7)
+  roof.position.set(0, 3.5, -1.5)
   group.add(roof)
 
   // Chimney
-  const chimney = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.0, 0.6), _brickMat))
-  chimney.position.set(1.2, 5.0, -0.5)
+  const chimney = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.5, 0.6), _brickMat))
+  chimney.position.set(1.2, 4.5, -0.5)
   group.add(chimney)
 
   // Chimney top cap
   const chimneyCap = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.15, 0.8), _stoneMat))
-  chimneyCap.position.set(1.2, 6.05, -0.5)
+  chimneyCap.position.set(1.2, 5.3, -0.5)
   group.add(chimneyCap)
 
   // Front door
@@ -292,6 +298,21 @@ function _buildAbout(def, scene, RAPIER, world, syncList) {
     group.add(sill)
   }
 
+  // Flower boxes under front windows
+  for (const xOff of [-1.3, 1.3]) {
+    const box = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 0.18),
+      new THREE.MeshStandardMaterial({ color: '#5a3a1a', flatShading: true })))
+    box.position.set(xOff, 1.83, 1.58)
+    group.add(box)
+    // Flowers (small green/colored spheres)
+    for (let fi = -1; fi <= 1; fi++) {
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4),
+        new THREE.MeshStandardMaterial({ color: fi === 0 ? '#ff6699' : '#44aa44', flatShading: true }))
+      flower.position.set(xOff + fi * 0.15, 1.95, 1.58)
+      group.add(flower)
+    }
+  }
+
   // Side windows (left and right walls)
   for (const side of [-1, 1]) {
     const sidePane = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.5), _glassMat))
@@ -326,6 +347,9 @@ function _buildAbout(def, scene, RAPIER, world, syncList) {
   const step1 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.3), _stoneMat))
   step1.position.set(0, 0.06, 2.85)
   group.add(step1)
+  const step2 = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.3), _stoneMat))
+  step2.position.set(0, -0.02, 3.15)
+  group.add(step2)
 
   // ── Props: Potted plants near the front (dynamic physics) ──
   for (const xOff of [-1.8, 1.8]) {

@@ -8,7 +8,7 @@ import * as THREE from 'three'
 
 /* ── Constants ──────────────────────────────────────────────── */
 
-const MAX_BLADES = 120000
+const MAX_BLADES = 60000
 
 // Cone geometry
 const CONE_RADIUS = 0.10
