@@ -171,7 +171,7 @@ function _buildDirectionPost(group, RAPIER, world) {
   const ARROW_SIZE = 0.14
 
   for (const sign of signs) {
-    const angle = Math.atan2(sign.tx - POST_X, sign.tz - POST_Z)
+    const angle = Math.atan2(sign.tx - POST_X, sign.tz - POST_Z) - Math.PI / 2
 
     // Canvas texture for the sign label
     const canvas = document.createElement('canvas')

@@ -1268,10 +1268,10 @@ export function createWorld(scene, RAPIER, world) {
 
     // --- Directional text labels painted on the roads ---
     const roadLabels = [
-      { text: 'ABOUT ME',   color: '#5b8dee', x: 0,  z: -8,  rot: 0 },               // N road
-      { text: 'PROJECTS',   color: '#f5a623', x: 8,  z: 0,   rot: -Math.PI / 2 },     // E road
-      { text: 'CONTACT',    color: '#50c878', x: 0,  z: 8,   rot: Math.PI },           // S road
-      { text: 'EXPERIENCE', color: '#e84393', x: -8, z: 0,   rot: Math.PI / 2 },       // W road
+      { text: 'ABOUT ME',   color: '#5b8dee', x: 0,  z: -4,  rot: 0 },               // N road
+      { text: 'PROJECTS',   color: '#f5a623', x: 4,  z: 0,   rot: -Math.PI / 2 },     // E road
+      { text: 'CONTACT',    color: '#50c878', x: 0,  z: 4,   rot: Math.PI },           // S road
+      { text: 'EXPERIENCE', color: '#e84393', x: -4, z: 0,   rot: Math.PI / 2 },       // W road
     ]
     for (const lb of roadLabels) {
       // Canvas with text + arrow
@@ -1286,7 +1286,7 @@ export function createWorld(scene, RAPIER, world) {
       ctx.font = 'bold 64px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(lb.text + '  →', 256, 64)
+      ctx.fillText(lb.text, 256, 64)
 
       const tex = new THREE.CanvasTexture(canvas)
       tex.colorSpace = THREE.SRGBColorSpace
