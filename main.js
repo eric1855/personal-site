@@ -84,6 +84,7 @@ worldSyncList.push(...interactSyncList)
 const { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash } = createUI()
 const popup = createPopup(() => {
   isPaused = false
+  justClosedPopup = true
   playPopupCloseSound()
   animatePopupClose()
 })
@@ -95,10 +96,12 @@ initAudio()
 let isPaused     = false
 let prevInteract = false
 let prevNear     = null
+let justClosedPopup = false
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && isPaused) {
     isPaused = false
+    justClosedPopup = true
     popup.close()
     playPopupCloseSound()
     animatePopupClose()
@@ -158,13 +161,14 @@ function loop(now) {
   prevInteract = keys.interact
 
   // Open popup on E press OR on entering the building's proximity circle
-  const justEnteredCircle = near && !prevNear
+  const justEnteredCircle = near && !prevNear && !justClosedPopup
   if ((triggered || justEnteredCircle) && near && !isPaused) {
     isPaused = true
     popup.open(near)
     playPopupOpenSound()
     animatePopupOpen(near)
   }
+  justClosedPopup = false
   prevNear = near
 
   // HUD updates: speedometer + minimap

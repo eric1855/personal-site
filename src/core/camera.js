@@ -1,20 +1,21 @@
 import * as THREE from 'three'
 
+// Normal follow-cam offset
 const OFFSET = new THREE.Vector3(0, 6, 10)
 const _desiredPos = new THREE.Vector3()
 const _desiredLookAt = new THREE.Vector3()
 const _currentLookAt = new THREE.Vector3()
 
 const SMOOTH_FACTOR = 0.08
-const BUILDING_SMOOTH = 0.04  // slower transition for building lock-on
+const BUILDING_SMOOTH = 0.05  // transition speed into lock-on
 
 // Camera shake state
 const SHAKE_DECAY = 0.88
 const SHAKE_FREQUENCY = 0.7
 
 // Building lock-on
-const LOCKON_ENTER_DIST = 12   // distance to start locking on
-const LOCKON_EXIT_DIST = 16    // distance to release lock-on (hysteresis)
+const LOCKON_ENTER_DIST = 9
+const LOCKON_EXIT_DIST = 13
 
 export function createCamera(aspect) {
   const camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000)
@@ -60,33 +61,19 @@ export function createCamera(aspect) {
     }
 
     if (_lockedBuilding) {
-      // Camera positioned relative to car but looking at building
-      // Place camera behind and above car (relative to car-to-building direction)
+      // FIXED stationary camera — positioned above the building, looking down at it
+      // Camera does NOT move with the car. It stays at a fixed elevated point
+      // so the user always sees the car driving below.
       const bx = _lockedBuilding.position.x
       const bz = _lockedBuilding.position.z
 
-      // Direction from building to car
-      const dx = carPos.x - bx
-      const dz = carPos.z - bz
-      const dist = Math.sqrt(dx * dx + dz * dz) || 1
-      const nx = dx / dist
-      const nz = dz / dist
+      // Fixed position: above and slightly offset from building (top-down-ish, ~60° angle)
+      _desiredPos.set(bx, 16, bz + 10)
 
-      // Camera behind car (away from building), raised up
-      _desiredPos.set(
-        carPos.x + nx * 6,
-        7,
-        carPos.z + nz * 6
-      )
+      // Look at the building center (slightly above ground)
+      _desiredLookAt.set(bx, 1.0, bz)
 
-      // Look at a point between car and building, biased toward building
-      _desiredLookAt.set(
-        bx + (carPos.x - bx) * 0.3,
-        3.5,  // look up at the building
-        bz + (carPos.z - bz) * 0.3
-      )
-
-      // Use slower smoothing for building lock-on
+      // Smooth transition to fixed position
       camera.position.lerp(_desiredPos, BUILDING_SMOOTH)
       _currentLookAt.lerp(_desiredLookAt, BUILDING_SMOOTH)
       camera.lookAt(_currentLookAt)
