@@ -31,38 +31,20 @@ const LOCATION_DEFS = [
             <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">This Site</h3>
             <a href="https://github.com/eric1855/personal-site" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
           </div>
-          <p style="margin:0 0 6px;font-size:0.9rem;">Interactive 3D portfolio built with Three.js and Rapier physics. Drive a car around, knock over dominos, and explore buildings. You're looking at it right now.</p>
+          <p style="margin:0 0 6px;font-size:0.9rem;">Interactive 3D portfolio you're exploring right now. Drive a car around a space colony, knock over physics objects, and discover portfolio buildings. ~9,000 lines of vanilla JS with a 2,600-line procedurally generated world, 60 Hz fixed-timestep game loop, and adaptive quality system.</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${['Three.js','Rapier','Vite','JavaScript'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
+            ${['Three.js','Rapier WASM','Vite','GSAP','Howler.js','troika-three-text','postprocessing'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
           </div>
         </div>
         <div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
             <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">ScottyStalls</h3>
             <a href="https://github.com/eric1855/ScottyStalls" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
+            <a href="https://drive.google.com/file/d/1vnNqPjb15x5mxHe_59MipTUJfzSqPFer/view?usp=sharing" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;margin-left:6px;padding:2px 8px;border:1px solid rgba(245,166,35,0.3);border-radius:4px;">Demo &rarr;</a>
           </div>
-          <p style="margin:0 0 6px;font-size:0.9rem;">Campus restroom rating app with live location, supported on iOS, Android, and web. Gained over 50,000 impressions online within a week of launch.</p>
+          <p style="margin:0 0 6px;font-size:0.9rem;">"The Yelp for Campus Restrooms" — cross-platform app for CMU students to discover, rate, and review every restroom on campus. Interactive map with real OpenStreetMap building footprint polygons, floor-by-floor navigation, multi-axis rating system, and offline tile caching. 50,000+ impressions in the first week.</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${['Flutter','Dart','AWS','Figma'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
-          </div>
-        </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-            <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">hackoweencandy.com</h3>
-          </div>
-          <p style="margin:0 0 6px;font-size:0.9rem;">Full-stack site that predicts the best trick-or-treating locations in your city using candy distribution datasets. First place overall at the 2025 Clark Hackathon.</p>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${['AWS Lambda','S3','Amplify','JavaScript'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
-          </div>
-        </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-            <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">ClipFarm</h3>
-            <a href="https://github.com/eric1855/ClipFarm" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
-          </div>
-          <p style="margin:0 0 6px;font-size:0.9rem;">Automatic long-form to short-form content generator for TikTok and Instagram Reels. Built at HackCMU 2025.</p>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${['Python'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
+            ${['Flutter','Dart','AWS Lambda','API Gateway','Provider','flutter_map','JWT Auth'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
           </div>
         </div>
         <div>
@@ -70,9 +52,30 @@ const LOCATION_DEFS = [
             <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">MinecraftLive</h3>
             <a href="https://github.com/eric1855/MinecraftLive" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
           </div>
-          <p style="margin:0 0 6px;font-size:0.9rem;">Tartan Hacks 2026 project.</p>
+          <p style="margin:0 0 6px;font-size:0.9rem;">Play Minecraft with your body — no keyboard needed. Webcam tracks full-body pose via MediaPipe to detect gestures (pump arms to run, jump to jump, raise hands to click, T-pose for inventory). Phone gyroscope handles camera aiming over WebSocket. Built at Tartan Hacks 2026.</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${['Python'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
+            ${['Python','MediaPipe','OpenCV','WebSockets','pyautogui','DeviceOrientation API'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">ClipFarm</h3>
+            <a href="https://github.com/eric1855/ClipFarm" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
+            <a href="https://drive.google.com/file/d/1MqYRu6mwf5bVdGm80AuJEJDopx05-E30/view?usp=sharing" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;margin-left:6px;padding:2px 8px;border:1px solid rgba(245,166,35,0.3);border-radius:4px;">Demo &rarr;</a>
+          </div>
+          <p style="margin:0 0 6px;font-size:0.9rem;">AI pipeline that converts long-form video into TikTok/Reels-ready short clips. Transcribes with Whisper ASR, uses Gemini/GPT to score and rank clip windows by retention potential, then FFmpeg extracts and splices candidates. Multi-tier LLM fallback chain and structured JSON schema enforcement. Built at HackCMU 2025.</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${['FastAPI','faster-whisper','Gemini','OpenAI','FFmpeg','Express.js','Tailwind'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">hackoweencandy.com</h3>
+            <a href="https://github.com/eric1855/HalloweenCandyPredictor" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
+          </div>
+          <p style="margin:0 0 6px;font-size:0.9rem;">Predicts trick-or-treating candy haul by zip code and time window using a serverless API. First place overall at the 2024 Clark Hackathon.</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${['AWS Lambda','API Gateway','JavaScript','GitHub Pages'].map(t => `<span style="padding:2px 8px;border-radius:4px;background:rgba(245,166,35,0.12);font-size:0.75rem;color:rgba(255,255,255,0.6);">${t}</span>`).join('')}
           </div>
         </div>
       </div>
@@ -126,6 +129,18 @@ const LOCATION_DEFS = [
     signOffset: { x: 0, y: 5.7, z: 1.57 },
     content: `
       <div style="display:flex;flex-direction:column;gap:20px;">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <h3 style="margin:0;font-size:1.05rem;color:#e84393;">Instawork</h3>
+            <span style="font-size:0.8rem;color:rgba(255,255,255,0.4);white-space:nowrap;">Feb 2026&ndash;Present</span>
+          </div>
+          <p style="margin:0 0 6px;font-size:0.85rem;color:rgba(255,255,255,0.55);font-style:italic;">Robotics AI Database Intern</p>
+          <ul style="margin:0;padding-left:18px;font-size:0.9rem;">
+            <li style="margin-bottom:4px;">Recruited 150+ CMU students onto the Instawork gig platform</li>
+            <li style="margin-bottom:4px;">Built OpenClaw undetectable web scraping pipeline to collect 10,000+ CMU student emails for outreach</li>
+            <li>Managed end-to-end operations: device distribution, background checks, payment setup, and activity tracking</li>
+          </ul>
+        </div>
         <div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
             <h3 style="margin:0;font-size:1.05rem;color:#e84393;">Pololu Robotics &amp; Electronics</h3>
