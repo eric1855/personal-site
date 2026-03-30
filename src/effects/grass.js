@@ -101,6 +101,26 @@ function _grassAcceptance(px, pz) {
   const rDist = Math.sqrt((px-17)*(px-17) + (pz+18)*(pz+18))
   if (rDist < 6) n *= rDist / 6
 
+  // Main rocket launch pad (18, -18, r=6)
+  const rkDist = Math.sqrt((px-18)*(px-18) + (pz+18)*(pz+18))
+  if (rkDist < 6) n *= rkDist / 6
+
+  // Smaller rocket pad (-21, 15, r=4.5)
+  const rk2Dist = Math.sqrt((px+21)*(px+21) + (pz-15)*(pz-15))
+  if (rk2Dist < 4.5) n *= rk2Dist / 4.5
+
+  // Rocket under construction pad (24, 12, r=5)
+  const rk3Dist = Math.sqrt((px-24)*(px-24) + (pz-12)*(pz-12))
+  if (rk3Dist < 5) n *= rk3Dist / 5
+
+  // Control tower (-21, -27, r=4)
+  const ctDist = Math.sqrt((px+21)*(px+21) + (pz+27)*(pz+27))
+  if (ctDist < 4) n *= ctDist / 4
+
+  // Communications array (30, -24, r=2)
+  const caDist = Math.sqrt((px-30)*(px-30) + (pz+24)*(pz+24))
+  if (caDist < 2) n *= caDist / 2
+
   // Patchy grass reduction in center-right area
   if (px > 5 && px < 25 && pz > -10 && pz < 10) {
     const patchNoise = _noise2D(px * 0.3, pz * 0.3)

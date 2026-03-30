@@ -17,6 +17,12 @@ let _popupClose  = null
 let _proximity   = null
 let _ambient     = null
 
+// Lofi track rotation
+let _lofiTracks  = []
+let _lofiIndex   = 0
+let _lofiTimer   = null
+const TRACK_DURATION_MS = 60000  // switch every 60 seconds
+
 // localStorage key
 const MUTE_KEY = 'audio_muted'
 
@@ -78,13 +84,47 @@ function _initSounds() {
     volume: 0.15,
   })
 
-  // Lofi background music
+  // Lofi background music — 6 tracks, rotate every 60s
   const base = import.meta.env.BASE_URL ?? '/'
+  _lofiTracks = [
+    `${base}assets/audio/lofi.mp3`,
+    `${base}assets/audio/lofi1.mp3`,
+    `${base}assets/audio/lofi2.mp3`,
+    `${base}assets/audio/lofi3.mp3`,
+    `${base}assets/audio/lofi4.mp3`,
+    `${base}assets/audio/lofi5.mp3`,
+  ]
+  _lofiIndex = Math.floor(Math.random() * _lofiTracks.length)
+  _playNextLofi()
+}
+
+// ── Lofi track rotation ──────────────────────────────────────────────
+function _playNextLofi() {
+  if (!_lofiTracks.length) return
+  try {
+    if (_ambient) { _ambient.stop(); _ambient.unload() }
+  } catch (_e) {}
+
   _ambient = _safeHowl({
-    src: [`${base}assets/audio/lofi.mp3`],
-    loop:   true,
+    src: [_lofiTracks[_lofiIndex]],
+    loop: false,
     volume: 0.15,
   })
+
+  if (_ambient) {
+    _ambient.on('end', _advanceLofi)
+    if (_initialised && !_muted) _ambient.play()
+  }
+
+  // Also set a timer in case the track is longer than 60s
+  clearTimeout(_lofiTimer)
+  _lofiTimer = setTimeout(_advanceLofi, TRACK_DURATION_MS)
+}
+
+function _advanceLofi() {
+  clearTimeout(_lofiTimer)
+  _lofiIndex = (_lofiIndex + 1) % _lofiTracks.length
+  _playNextLofi()
 }
 
 // ── Mute button ──────────────────────────────────────────────────────

@@ -179,7 +179,7 @@ function _createSpheres(group, RAPIER, world, syncList) {
 }
 
 // ─── Bowling Pins ──────────────────────────────────────────────────────────
-// Standard 10-pin triangle formation near the Experience building (-20, 0)
+// Standard 10-pin triangle formation — moved closer to center
 function _createBowlingPins(group, RAPIER, world, syncList) {
   const PIN_R = 0.12
   const PIN_H = 0.6
@@ -191,8 +191,8 @@ function _createBowlingPins(group, RAPIER, world, syncList) {
   const redMat    = new THREE.MeshStandardMaterial({ color: '#cc2222', flatShading: true })
   const stripeGeo = new THREE.CylinderGeometry(PIN_R + 0.005, PIN_R + 0.005, 0.08, 8)
 
-  // Standard bowling triangle: rows of 1, 2, 3, 4 pins
-  const baseX = -14
+  // Moved closer to center (was -14, -1)
+  const baseX = -8
   const baseZ = -1
   const spacing = 0.35
 

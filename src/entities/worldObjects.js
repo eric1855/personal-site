@@ -15,7 +15,7 @@ export function createWorldObjects(scene, RAPIER, world) {
   _createBenches(scene, RAPIER, world, syncList)
   _createRocks(scene, RAPIER, world, syncList)
   _createFlowerPatches(scene)
-  _createSignposts(scene, RAPIER, world, syncList)
+  // signposts removed — main one is in nameBlocks.js
   _createFence(scene)
   const treeMeshes = _createTrees(scene, RAPIER, world, syncList)
   return { treeMeshes, syncList }

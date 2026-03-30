@@ -6,6 +6,7 @@ const LOCATION_DEFS = [
     label: 'About Me',
     position: { x: 0, z: -20 },
     color: '#5b8dee',
+    labelY: 7,
     bodySize: { w: 4.0, h: 5.0, d: 3.0 },
     bodyY: 2.5,
     signOffset: { x: 0, y: 4.7, z: 1.57 },
@@ -19,6 +20,7 @@ const LOCATION_DEFS = [
     label: 'Projects',
     position: { x: 20, z: 0 },
     color: '#f5a623',
+    labelY: 7,
     bodySize: { w: 5.5, h: 3.5, d: 3.5 },
     bodyY: 1.75,
     signOffset: { x: 0, y: 3.1, z: 1.82 },
@@ -81,6 +83,7 @@ const LOCATION_DEFS = [
     label: 'Contact',
     position: { x: 0, z: 20 },
     color: '#50c878',
+    labelY: 6,
     bodySize: { w: 4.0, h: 4.0, d: 3.5 },
     bodyY: 2.0,
     signOffset: { x: 0, y: 3.7, z: 1.82 },
@@ -117,6 +120,7 @@ const LOCATION_DEFS = [
     label: 'Experience',
     position: { x: -20, z: 0 },
     color: '#e84393',
+    labelY: 10,
     bodySize: { w: 3.5, h: 6.0, d: 3.0 },
     bodyY: 3.0,
     signOffset: { x: 0, y: 5.7, z: 1.57 },
@@ -279,37 +283,34 @@ function _buildAbout(def, scene, RAPIER, world, syncList) {
   knob.position.set(0.25, 0.85, 1.58)
   group.add(knob)
 
-  // Windows (front face) — two windows flanking the door
+  // Windows (front face) — two windows flanking the door with shutters
+  // Positioned above the porch overhang (overhang is at y=2.15)
   for (const xOff of [-1.3, 1.3]) {
     // Window pane (glass)
-    const pane = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.06), _glassMat))
-    pane.position.set(xOff, 2.3, 1.53)
+    const pane = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.06), _glassMat))
+    pane.position.set(xOff, 2.8, 1.53)
     group.add(pane)
-    // Window frame (white cross)
-    const frameH = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.06, 0.08), trimMat))
-    frameH.position.set(xOff, 2.3, 1.54)
+    // Window outer frame
+    const frameOuter = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.04), trimMat))
+    frameOuter.position.set(xOff, 2.8, 1.52)
+    group.add(frameOuter)
+    // Cross divider — thin
+    const frameH = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 0.07), trimMat))
+    frameH.position.set(xOff, 2.8, 1.55)
     group.add(frameH)
-    const frameV = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.75, 0.08), trimMat))
-    frameV.position.set(xOff, 2.3, 1.54)
+    const frameV = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.8, 0.07), trimMat))
+    frameV.position.set(xOff, 2.8, 1.55)
     group.add(frameV)
     // Window sill
-    const sill = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 0.15), trimMat))
-    sill.position.set(xOff, 1.92, 1.56)
+    const sill = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.06, 0.12), trimMat))
+    sill.position.set(xOff, 2.37, 1.55)
     group.add(sill)
-  }
-
-  // Flower boxes under front windows
-  for (const xOff of [-1.3, 1.3]) {
-    const box = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 0.18),
-      new THREE.MeshStandardMaterial({ color: '#5a3a1a', flatShading: true })))
-    box.position.set(xOff, 1.83, 1.58)
-    group.add(box)
-    // Flowers (small green/colored spheres)
-    for (let fi = -1; fi <= 1; fi++) {
-      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4),
-        new THREE.MeshStandardMaterial({ color: fi === 0 ? '#ff6699' : '#44aa44', flatShading: true }))
-      flower.position.set(xOff + fi * 0.15, 1.95, 1.58)
-      group.add(flower)
+    // Shutters (flanking each window)
+    const shutterMat = new THREE.MeshStandardMaterial({ color: '#2a4a7e', flatShading: true })
+    for (const side of [-1, 1]) {
+      const shutter = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.8, 0.05), shutterMat))
+      shutter.position.set(xOff + side * 0.53, 2.8, 1.54)
+      group.add(shutter)
     }
   }
 
@@ -838,61 +839,52 @@ function _buildContact(def, scene, RAPIER, world, syncList) {
   parapet.position.set(0, 3.9, 1.82)
   group.add(parapet)
 
-  // Arched entrance — built from a door + half-cylinder arch above
+  // Arched entrance — door + arch (z-staggered to avoid z-fighting)
   const door = _shadow(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 0.1), doorMat))
-  door.position.set(0, 0.95, 1.77)
+  door.position.set(0, 0.95, 1.80)
   group.add(door)
 
-  // Arch above door (half cylinder)
-  const archGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.12, 16, 1, false, 0, Math.PI)
-  const arch = _shadow(new THREE.Mesh(archGeo, wallMat))
-  arch.position.set(0, 1.85, 1.78)
-  arch.rotation.set(Math.PI / 2, 0, 0)
-  group.add(arch)
-
-  // Arch trim (slightly larger, darker)
-  const archTrimGeo = new THREE.CylinderGeometry(0.72, 0.72, 0.14, 16, 1, false, 0, Math.PI)
+  // Arch trim (behind the arch — larger, darker frame)
+  const archTrimGeo = new THREE.CylinderGeometry(0.72, 0.72, 0.10, 16, 1, false, 0, Math.PI)
   const archTrim = _shadow(new THREE.Mesh(archTrimGeo, roofMat))
-  archTrim.position.set(0, 1.85, 1.77)
+  archTrim.position.set(0, 1.85, 1.82)
   archTrim.rotation.set(Math.PI / 2, 0, 0)
   group.add(archTrim)
+
+  // Arch above door (half cylinder — in front of trim)
+  const archGeo = new THREE.CylinderGeometry(0.60, 0.60, 0.10, 16, 1, false, 0, Math.PI)
+  const arch = _shadow(new THREE.Mesh(archGeo, wallMat))
+  arch.position.set(0, 1.85, 1.86)
+  arch.rotation.set(Math.PI / 2, 0, 0)
+  group.add(arch)
 
   // Door panels (vertical lines)
   for (const xOff of [-0.2, 0.2]) {
     const panel = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.6, 0.06),
       new THREE.MeshStandardMaterial({ color: '#1a4a2a', flatShading: true })))
-    panel.position.set(xOff, 0.85, 1.82)
+    panel.position.set(xOff, 0.85, 1.86)
     group.add(panel)
   }
 
-  // Mail slot on the front wall (right of door)
-  const slotBg = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.08), _darkMat))
-  slotBg.position.set(1.3, 1.5, 1.78)
-  group.add(slotBg)
-  const slot = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 0.1), _metalMat))
-  slot.position.set(1.3, 1.5, 1.82)
-  group.add(slot)
-  // Label above slot
-  const slotLabel = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.04), _whiteMat))
-  slotLabel.position.set(1.3, 1.75, 1.80)
-  group.add(slotLabel)
-
-  // Windows (front face, flanking entrance)
+  // Windows (front face, flanking entrance) — z-staggered to avoid z-fighting
   for (const xOff of [-1.4, 1.4]) {
-    if (Math.abs(xOff - 1.3) < 0.5) continue // skip right if too close to mail slot
-    const win = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.06), _glassMat))
-    win.position.set(xOff, 2.5, 1.78)
-    group.add(win)
-    const frame = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.85, 0.04), _whiteMat))
-    frame.position.set(xOff, 2.5, 1.77)
+    const frame = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.04), _whiteMat))
+    frame.position.set(xOff, 2.3, 1.78)
     group.add(frame)
+    const win = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.06), _glassMat))
+    win.position.set(xOff, 2.3, 1.80)
+    group.add(win)
     // Cross divider
-    const fH = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.04, 0.07), _whiteMat))
-    fH.position.set(xOff, 2.5, 1.79)
+    const fH = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.07), _whiteMat))
+    fH.position.set(xOff, 2.3, 1.83)
     group.add(fH)
-    const fV = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.85, 0.07), _whiteMat))
-    fV.position.set(xOff, 2.5, 1.79)
+    const fV = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.9, 0.07), _whiteMat))
+    fV.position.set(xOff, 2.3, 1.83)
     group.add(fV)
+    // Window sill
+    const sill = _shadow(new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.06, 0.1), _whiteMat))
+    sill.position.set(xOff, 1.82, 1.83)
+    group.add(sill)
   }
 
   // Side windows
@@ -1075,7 +1067,8 @@ export function createLocations(scene, RAPIER, world) {
       id:       def.id,
       label:    def.label,
       color:    def.color,
-      radius:   6,
+      radius:   9,
+      labelY:   def.labelY || 7,
       content:  def.content,
       position: new THREE.Vector3(def.position.x, 0, def.position.z),
     })

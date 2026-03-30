@@ -460,9 +460,7 @@ export function createWorld(scene, RAPIER, world) {
     const dishDefs = [
       { x: -11, z: -13, speed: 0.15 },
       { x: -13, z: -11, speed: 0.22 },
-      { x: 27,  z: -6,  speed: 0.18 },
-      { x: 25,  z: -9,  speed: 0.12 },
-      { x: -9,  z: 27,  speed: 0.25 },
+      { x: -12, z: 38,  speed: 0.25 },
     ]
     for (const d of dishDefs) {
       const dg = new THREE.Group()
@@ -525,7 +523,7 @@ export function createWorld(scene, RAPIER, world) {
   // — Domed Habitats (3) —
   {
     const habDefs = [
-      { x: -24, z: -6,  r: 3.5, h: 2.0 },
+      { x: -33, z: -10, r: 3.5, h: 2.0 },
       { x: 21,  z: 24,  r: 3.0, h: 1.8 },
       { x: -12, z: -24, r: 2.8, h: 1.6 },
     ]
@@ -763,7 +761,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Landing Bay (open-roof box) —
   {
-    const lx = -6, lz = 27
+    const lx = -6, lz = 38
     const wallH = 3
     // 3 walls (open on one side)
     const wallDefs = [
@@ -984,7 +982,7 @@ export function createWorld(scene, RAPIER, world) {
   {
     const floraDefs = [
       { x: 10,  z: 10,  h: 2.5, color: CYAN_E },
-      { x: -12, z: 12,  h: 3.0, color: PURPLE_E },
+      { x: -16, z: 16,  h: 3.0, color: PURPLE_E },
       { x: 8,   z: -10, h: 2.0, color: PINK_E },
       { x: -8,  z: -12, h: 2.8, color: GREEN_E },
       { x: 25,  z: 15,  h: 3.2, color: CYAN_E },
@@ -1267,6 +1265,45 @@ export function createWorld(scene, RAPIER, world) {
       grateEW.position.set(i, 0.085, 0)
       group.add(grateEW)
     }
+
+    // --- Directional text labels painted on the roads ---
+    const roadLabels = [
+      { text: 'ABOUT ME',   color: '#5b8dee', x: 0,  z: -8,  rot: 0 },               // N road
+      { text: 'PROJECTS',   color: '#f5a623', x: 8,  z: 0,   rot: -Math.PI / 2 },     // E road
+      { text: 'CONTACT',    color: '#50c878', x: 0,  z: 8,   rot: Math.PI },           // S road
+      { text: 'EXPERIENCE', color: '#e84393', x: -8, z: 0,   rot: Math.PI / 2 },       // W road
+    ]
+    for (const lb of roadLabels) {
+      // Canvas with text + arrow
+      const canvas = document.createElement('canvas')
+      canvas.width = 512
+      canvas.height = 128
+      const ctx = canvas.getContext('2d')
+
+      ctx.clearRect(0, 0, 512, 128)
+      ctx.fillStyle = lb.color
+      ctx.globalAlpha = 0.85
+      ctx.font = 'bold 64px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(lb.text + '  →', 256, 64)
+
+      const tex = new THREE.CanvasTexture(canvas)
+      tex.colorSpace = THREE.SRGBColorSpace
+      const labelMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+      })
+
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.65), labelMat)
+      plane.rotation.x = -Math.PI / 2
+      plane.rotation.z = lb.rot
+      plane.position.set(lb.x, 0.10, lb.z)
+      group.add(plane)
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1393,59 +1430,6 @@ export function createWorld(scene, RAPIER, world) {
         rib.rotation.y = c.rot
         group.add(rib)
       }
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // CONTROL PANELS (5)
-  // ═══════════════════════════════════════════════════════════════════
-  {
-    const panelDefs = [
-      { x: 8,   z: -18, rot: 0 },
-      { x: 18,  z: 8,   rot: -1.5 },
-      { x: -8,  z: 18,  rot: Math.PI },
-      { x: -18, z: -8,  rot: 1.5 },
-      { x: 30,  z: -28, rot: 0.3 },
-    ]
-    for (const p of panelDefs) {
-      const pg = new THREE.Group()
-      pg.position.set(p.x, 0, p.z)
-      pg.rotation.y = p.rot
-
-      // Body
-      const body = shadow(new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 1.2, 0.4), mat(DARK_GRAY)
-      ))
-      body.position.y = 0.6
-      pg.add(body)
-
-      // Emissive screen
-      const screen = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 0.5, 0.02),
-        emissiveMat(0x003322, GREEN_E, 1.5)
-      )
-      screen.position.set(0, 0.9, 0.21)
-      pg.add(screen)
-
-      // Buttons
-      const btnColors = [RED, YELLOW, GREEN_E]
-      for (let b = 0; b < 3; b++) {
-        const btn = new THREE.Mesh(
-          new THREE.SphereGeometry(0.04, 6, 4),
-          emissiveMat(btnColors[b], btnColors[b], 0.8)
-        )
-        btn.position.set(-0.15 + b * 0.15, 0.55, 0.21)
-        pg.add(btn)
-      }
-
-      // Pedestal
-      const ped = shadow(new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.3, 0.3), mat(STEEL)
-      ))
-      ped.position.y = 0.15
-      pg.add(ped)
-
-      group.add(pg)
     }
   }
 
@@ -1859,43 +1843,6 @@ export function createWorld(scene, RAPIER, world) {
   // DYNAMIC OBJECTS — pushable!
   // ═══════════════════════════════════════════════════════════════════
 
-  // — Supply Crates (6, dynamic) —
-  {
-    const crateDefs = [
-      { x: 5,   z: 5 },
-      { x: -5,  z: 5 },
-      { x: 5,   z: -5 },
-      { x: -5,  z: -5 },
-      { x: 12,  z: -12 },
-      { x: -12, z: 12 },
-    ]
-    for (const c of crateDefs) {
-      const size = 0.4
-      const crateMesh = shadow(new THREE.Mesh(
-        new THREE.BoxGeometry(size * 2, size * 2, size * 2), mat(STEEL)
-      ))
-      crateMesh.position.set(c.x, size, c.z)
-      group.add(crateMesh)
-
-      // Orange stripe
-      const stripe = shadow(new THREE.Mesh(
-        new THREE.BoxGeometry(size * 2.02, 0.12, size * 2.02), mat(ORANGE)
-      ))
-      stripe.position.set(c.x, size, c.z)
-      group.add(stripe)
-
-      const bd = RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(c.x, size, c.z)
-        .setLinearDamping(0.4).setAngularDamping(0.5)
-      const body = world.createRigidBody(bd)
-      world.createCollider(
-        RAPIER.ColliderDesc.cuboid(size, size, size)
-          .setDensity(4.0).setFriction(0.5).setRestitution(0.15), body
-      )
-      syncList.push({ mesh: crateMesh, body })
-    }
-  }
-
   // — Fuel Barrels (4, dynamic) —
   {
     const barrelDefs = [
@@ -2305,11 +2252,11 @@ export function createWorld(scene, RAPIER, world) {
     })
     goopAnims.push({ material: goopMat, phase: 0 })
 
-    // --- 3 overlapping circles for irregular shape ---
+    // --- 3 overlapping circles for irregular shape (staggered y to avoid z-fighting) ---
     const pondDefs = [
-      { x: 18, z: 17, r: 4, y: 0.03 },
-      { x: 19, z: 16, r: 2.5, y: 0.04 },
-      { x: 17, z: 18, r: 2, y: 0.05 },
+      { x: 18, z: 17, r: 4, y: 0.02 },
+      { x: 19, z: 16, r: 2.5, y: 0.08 },
+      { x: 17, z: 18, r: 2, y: 0.14 },
     ]
     for (const p of pondDefs) {
       const pond = new THREE.Mesh(
