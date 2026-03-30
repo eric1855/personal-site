@@ -53,7 +53,7 @@ All syncLists from all entities/zones/worlds are merged into a single array in m
 For objects that should sit on the ground (trees, lampposts, etc.): body is placed at `y=0`, collider is offset up via `ColliderDesc.setTranslation(0, halfHeight, 0)`. This prevents objects from floating when synced.
 
 ### Worlds vs Zones
-- **Worlds** (`src/worlds/`): full standalone maps loaded via `?world=` URL param. Set their own sky, fog, ground. Default is `space.js`.
+- **Worlds** (`src/worlds/`): full standalone maps loaded via `?world=` URL param. Set their own sky, fog, ground. Default is `space.js`. Space world uses a glass dome boundary (radius 62, height 45) with MeshPhysicalMaterial transmission, wireframe structural ribs, metal base ring, and 32 invisible cuboid collision segments around the perimeter.
 - **Zones** (`src/zones/`): additive areas layered onto the base world at specific coordinates. Each has own `createZoneName(scene, RAPIER, world)`.
 
 ### Portfolio Building Interaction

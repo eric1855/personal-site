@@ -111,29 +111,72 @@ export function createWorld(scene, RAPIER, world) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // BOUNDARY WALLS at ±60
+  // GLASS DOME — habitat dome enclosing the colony
   // ═══════════════════════════════════════════════════════════════════
   {
-    const wallH = 4
-    const wallThick = 0.5
-    const wallDefs = [
-      { tx: 0,   tz: -60, hx: 60, hz: wallThick },
-      { tx: 0,   tz: 60,  hx: 60, hz: wallThick },
-      { tx: -60, tz: 0,   hx: wallThick, hz: 60 },
-      { tx: 60,  tz: 0,   hx: wallThick, hz: 60 },
-    ]
-    for (const w of wallDefs) {
-      // Visual wall
-      const geo = new THREE.BoxGeometry(w.hx * 2, wallH, w.hz * 2)
-      const mesh = shadow(new THREE.Mesh(geo, mat(DARK_ROCK)))
-      mesh.position.set(w.tx, wallH / 2, w.tz)
-      group.add(mesh)
-      // Rapier
-      const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(w.tx, wallH / 2, w.tz)
+    const DOME_RADIUS = 62
+    const DOME_HEIGHT = 45
+
+    // Main dome — transparent glass with subtle blue tint
+    const domeGeo = new THREE.SphereGeometry(DOME_RADIUS, 48, 32, 0, Math.PI * 2, 0, Math.PI / 2)
+    const domeMat = new THREE.MeshPhysicalMaterial({
+      color: 0x88ccff,
+      transparent: true,
+      opacity: 0.08,
+      roughness: 0.05,
+      metalness: 0.1,
+      transmission: 0.9,
+      thickness: 0.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+    const dome = new THREE.Mesh(domeGeo, domeMat)
+    dome.scale.set(1, DOME_HEIGHT / DOME_RADIUS, 1)
+    dome.position.y = 0
+    group.add(dome)
+
+    // Wireframe overlay — visible structural ribs
+    const wireGeo = new THREE.SphereGeometry(DOME_RADIUS + 0.1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2)
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: 0x4488aa,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.15,
+      depthWrite: false,
+    })
+    const wireframe = new THREE.Mesh(wireGeo, wireMat)
+    wireframe.scale.set(1, DOME_HEIGHT / DOME_RADIUS, 1)
+    wireframe.position.y = 0
+    group.add(wireframe)
+
+    // Base ring — thick metal ring at ground level
+    const ringGeo = new THREE.TorusGeometry(DOME_RADIUS, 0.8, 8, 64)
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0x556677,
+      metalness: 0.7,
+      roughness: 0.3,
+      flatShading: true,
+    })
+    const ring = new THREE.Mesh(ringGeo, ringMat)
+    ring.rotation.x = -Math.PI / 2
+    ring.position.y = 0.3
+    ring.castShadow = true
+    ring.receiveShadow = true
+    group.add(ring)
+
+    // Invisible collision boundary — ring of cuboid segments around perimeter
+    const WALL_SEGMENTS = 32
+    for (let i = 0; i < WALL_SEGMENTS; i++) {
+      const angle = (i / WALL_SEGMENTS) * Math.PI * 2
+      const wx = Math.cos(angle) * (DOME_RADIUS - 1)
+      const wz = Math.sin(angle) * (DOME_RADIUS - 1)
+      const bd = RAPIER.RigidBodyDesc.fixed().setTranslation(wx, 3, wz)
       const body = world.createRigidBody(bd)
-      world.createCollider(
-        RAPIER.ColliderDesc.cuboid(w.hx, wallH / 2, w.hz).setFriction(0.5), body
-      )
+      // Tangent-aligned wall segment
+      const segLen = (2 * Math.PI * (DOME_RADIUS - 1)) / WALL_SEGMENTS / 2 + 0.5
+      const cd = RAPIER.ColliderDesc.cuboid(segLen, 3, 0.5).setFriction(0.5)
+      cd.setRotation({ x: 0, y: Math.sin(-angle / 2), z: 0, w: Math.cos(-angle / 2) })
+      world.createCollider(cd, body)
     }
   }
 

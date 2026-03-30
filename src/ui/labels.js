@@ -19,7 +19,7 @@ export function createLabels(scene, locations) {
     text.color = loc.color
     text.anchorX = 'center'
     text.anchorY = 'bottom'
-    text.position.set(loc.position.x, 8.5, loc.position.z)
+    text.position.set(loc.position.x, 5.5, loc.position.z)
     // Face the default camera direction (looking from +z toward -z)
     text.rotation.set(0, 0, 0)
     text.outlineWidth = 0.04

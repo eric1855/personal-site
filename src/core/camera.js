@@ -15,7 +15,7 @@ const SHAKE_FREQUENCY = 0.7
 
 // Building lock-on
 const LOCKON_ENTER_DIST = 9
-const LOCKON_EXIT_DIST = 13
+const LOCKON_EXIT_DIST = 10
 
 export function createCamera(aspect) {
   const camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000)
