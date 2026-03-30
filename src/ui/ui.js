@@ -270,15 +270,8 @@ export function createUI() {
 
   // ─── Public helpers ───────────────────────────────────────────────────────
 
-  function updateProximityPrompt(nearLocation) {
-    if (nearLocation) {
-      prompt.textContent = `[ E ]  Enter ${nearLocation.label}`
-      prompt.style.opacity = '1'
-      prompt.style.transform = 'translateX(-50%) translateY(0)'
-    } else {
-      prompt.style.opacity = '0'
-      prompt.style.transform = 'translateX(-50%) translateY(8px)'
-    }
+  function updateProximityPrompt(_nearLocation) {
+    // Buildings auto-open on proximity — no prompt needed
   }
 
   /**
