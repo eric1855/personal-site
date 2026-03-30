@@ -160,9 +160,8 @@ function loop(now) {
   const triggered = keys.interact && !prevInteract
   prevInteract = keys.interact
 
-  // Open popup on E press OR on entering the building's proximity circle
-  const justEnteredCircle = near && !prevNear && !justClosedPopup
-  if ((triggered || justEnteredCircle) && near && !isPaused) {
+  // Open popup on E press
+  if (triggered && near && !isPaused) {
     isPaused = true
     popup.open(near)
     playPopupOpenSound()
