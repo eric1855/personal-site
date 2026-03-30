@@ -141,7 +141,7 @@ export function createWorld(scene, RAPIER, world) {
   // MAIN ROCKET — tallest structure (~15 units) on launch pad
   // ═══════════════════════════════════════════════════════════════════
   {
-    const rx = 30, rz = -30
+    const rx = 18, rz = -18
     const rocketGroup = new THREE.Group()
     rocketGroup.position.set(rx, 0, rz)
 
@@ -284,7 +284,7 @@ export function createWorld(scene, RAPIER, world) {
   // SMALLER ROCKET on second pad
   // ═══════════════════════════════════════════════════════════════════
   {
-    const rx = -35, rz = 25
+    const rx = -21, rz = 15
     const g = new THREE.Group()
     g.position.set(rx, 0, rz)
 
@@ -340,7 +340,7 @@ export function createWorld(scene, RAPIER, world) {
   // ROCKET UNDER CONSTRUCTION (no nose cone, scaffolding)
   // ═══════════════════════════════════════════════════════════════════
   {
-    const rx = 40, rz = 20
+    const rx = 24, rz = 12
     const g = new THREE.Group()
     g.position.set(rx, 0, rz)
 
@@ -415,11 +415,11 @@ export function createWorld(scene, RAPIER, world) {
   // ═══════════════════════════════════════════════════════════════════
   {
     const dishDefs = [
-      { x: -18, z: -22, speed: 0.15 },
-      { x: -22, z: -18, speed: 0.22 },
-      { x: 45,  z: -10, speed: 0.18 },
-      { x: 42,  z: -15, speed: 0.12 },
-      { x: -15, z: 45,  speed: 0.25 },
+      { x: -11, z: -13, speed: 0.15 },
+      { x: -13, z: -11, speed: 0.22 },
+      { x: 27,  z: -6,  speed: 0.18 },
+      { x: 25,  z: -9,  speed: 0.12 },
+      { x: -9,  z: 27,  speed: 0.25 },
     ]
     for (const d of dishDefs) {
       const dg = new THREE.Group()
@@ -482,9 +482,9 @@ export function createWorld(scene, RAPIER, world) {
   // — Domed Habitats (3) —
   {
     const habDefs = [
-      { x: -40, z: -10, r: 3.5, h: 2.0 },
-      { x: 35,  z: 40,  r: 3.0, h: 1.8 },
-      { x: -20, z: -40, r: 2.8, h: 1.6 },
+      { x: -24, z: -6,  r: 3.5, h: 2.0 },
+      { x: 21,  z: 24,  r: 3.0, h: 1.8 },
+      { x: -12, z: -24, r: 2.8, h: 1.6 },
     ]
     for (const hb of habDefs) {
       // Cylinder base
@@ -551,7 +551,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Control Tower —
   {
-    const tx = -35, tz = -45
+    const tx = -21, tz = -27
     const tg = new THREE.Group()
     tg.position.set(tx, 0, tz)
 
@@ -619,7 +619,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Communications Array —
   {
-    const cx = 50, cz = -40
+    const cx = 30, cz = -24
     // Tall cylinder
     const mast = shadow(new THREE.Mesh(
       new THREE.CylinderGeometry(0.5, 0.7, 8, 6), mat(STEEL)
@@ -657,7 +657,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Power Station —
   {
-    const px = -50, pz = -20
+    const px = -30, pz = -12
     const ps = shadow(new THREE.Mesh(
       new THREE.BoxGeometry(5, 3, 4), mat(DARK_GRAY)
     ))
@@ -681,7 +681,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Greenhouse Dome (semi-transparent green) —
   {
-    const gx = 25, gz = -45
+    const gx = 15, gz = -27
     // Base cylinder
     const base = shadow(new THREE.Mesh(
       new THREE.CylinderGeometry(4, 4, 1.0, 10), mat(STEEL)
@@ -720,7 +720,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Landing Bay (open-roof box) —
   {
-    const lx = -10, lz = 45
+    const lx = -6, lz = 27
     const wallH = 3
     // 3 walls (open on one side)
     const wallDefs = [
@@ -829,7 +829,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Hover Transport —
   {
-    const hx = -40, hz = 40
+    const hx = -24, hz = 24
     // Platform body
     const platform = shadow(new THREE.Mesh(
       new THREE.BoxGeometry(4, 0.3, 3), mat(STEEL)
@@ -870,7 +870,7 @@ export function createWorld(scene, RAPIER, world) {
 
   // — Mining Vehicle —
   {
-    const mx = 50, mz = 30
+    const mx = 30, mz = 18
     const mg = new THREE.Group()
     mg.position.set(mx, 0, mz)
 
@@ -1487,11 +1487,11 @@ export function createWorld(scene, RAPIER, world) {
   // ═══════════════════════════════════════════════════════════════════
   {
     const antDefs = [
-      { x: -55, z: 0 },
-      { x: 55,  z: 0 },
-      { x: 0,   z: 55 },
-      { x: 0,   z: -55 },
-      { x: -30, z: 50 },
+      { x: -33, z: 0 },
+      { x: 33,  z: 0 },
+      { x: 0,   z: 33 },
+      { x: 0,   z: -33 },
+      { x: -18, z: 30 },
     ]
     for (const a of antDefs) {
       const mast = shadow(new THREE.Mesh(
@@ -1584,7 +1584,7 @@ export function createWorld(scene, RAPIER, world) {
   // ROBOTIC ARM
   // ═══════════════════════════════════════════════════════════════════
   {
-    const ax = 30, az = 15
+    const ax = 18, az = 9
     // Base
     const base = shadow(new THREE.Mesh(
       new THREE.CylinderGeometry(0.6, 0.8, 0.5, 8), mat(STEEL)
@@ -1942,51 +1942,51 @@ export function createWorld(scene, RAPIER, world) {
   {
     const DARK_ROCK_MAT = mat(0x1e1e2e)
 
-    // --- Tallest peak at (-32, 0, -36): 3 stacked cones ---
+    // --- Tallest peak at (-19, 0, -22): 3 stacked cones ---
     const peak1Base = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(5, 4, 8), DARK_ROCK_MAT
     ))
-    peak1Base.position.set(-32, 2, -36)
+    peak1Base.position.set(-19, 2, -22)
     group.add(peak1Base)
     const peak1Mid = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(3, 3, 8), DARK_ROCK_MAT
     ))
-    peak1Mid.position.set(-32, 5.5, -36)
+    peak1Mid.position.set(-19, 5.5, -22)
     group.add(peak1Mid)
     const peak1Top = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(1.5, 3, 8), DARK_ROCK_MAT
     ))
-    peak1Top.position.set(-32, 8.5, -36)
+    peak1Top.position.set(-19, 8.5, -22)
     group.add(peak1Top)
 
-    // --- Medium peak at (-28, 0, -32): 2 cones ---
+    // --- Medium peak at (-17, 0, -19): 2 cones ---
     const peak2Base = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(4, 3, 8), DARK_ROCK_MAT
     ))
-    peak2Base.position.set(-28, 1.5, -32)
+    peak2Base.position.set(-17, 1.5, -19)
     group.add(peak2Base)
     const peak2Top = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(2, 2.5, 8), DARK_ROCK_MAT
     ))
-    peak2Top.position.set(-28, 4.25, -32)
+    peak2Top.position.set(-17, 4.25, -19)
     group.add(peak2Top)
 
-    // --- Small peak at (-36, 0, -33): 2 cones ---
+    // --- Small peak at (-22, 0, -20): 2 cones ---
     const peak3Base = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(3, 2.5, 8), DARK_ROCK_MAT
     ))
-    peak3Base.position.set(-36, 1.25, -33)
+    peak3Base.position.set(-22, 1.25, -20)
     group.add(peak3Base)
     const peak3Top = shadow(new THREE.Mesh(
       new THREE.ConeGeometry(1.5, 2, 8), DARK_ROCK_MAT
     ))
-    peak3Top.position.set(-36, 3.5, -33)
+    peak3Top.position.set(-22, 3.5, -20)
     group.add(peak3Top)
 
     // --- Rocky base boulders ---
     const boulderGeo = new THREE.DodecahedronGeometry(2, 0)
     const boulderPositions = [
-      [-30, 0.4, -34], [-34, 0.4, -35], [-29, 0.4, -38], [-35, 0.4, -31]
+      [-18, 0.4, -20], [-20, 0.4, -21], [-17, 0.4, -23], [-21, 0.4, -19]
     ]
     for (const [bx, by, bz] of boulderPositions) {
       const boulder = shadow(new THREE.Mesh(boulderGeo, DARK_ROCK_MAT))
@@ -2000,14 +2000,14 @@ export function createWorld(scene, RAPIER, world) {
     const cave = shadow(new THREE.Mesh(
       new THREE.BoxGeometry(2, 1.8, 1), mat(0x050510)
     ))
-    cave.position.set(-30, 0.9, -34)
+    cave.position.set(-18, 0.9, -20)
     group.add(cave)
 
     // --- Purple emissive crystals flanking cave ---
     const caveCrystalMat = emissiveMat(0xaa44ff, 0xaa44ff, 0.8)
     const caveCrystalGeo = new THREE.DodecahedronGeometry(0.4, 0)
     const caveCrystalDefs = [
-      [-31.2, 0.5, -33.8], [-28.8, 0.5, -34.2], [-30, 1.9, -33.7]
+      [-19.2, 0.5, -19.8], [-16.8, 0.5, -20.2], [-18, 1.9, -19.7]
     ]
     for (const [cx, cy, cz] of caveCrystalDefs) {
       const crystal = shadow(new THREE.Mesh(caveCrystalGeo, caveCrystalMat))
@@ -2018,22 +2018,22 @@ export function createWorld(scene, RAPIER, world) {
 
     // --- PointLight inside cave ---
     const caveLight = new THREE.PointLight(0x00ffff, 0.5, 6)
-    caveLight.position.set(-30, 1.2, -34.3)
+    caveLight.position.set(-18, 1.2, -20.6)
     group.add(caveLight)
 
     // --- Fixed Rapier colliders at each peak base ---
     {
-      const bd1 = RAPIER.RigidBodyDesc.fixed().setTranslation(-32, 2, -36)
+      const bd1 = RAPIER.RigidBodyDesc.fixed().setTranslation(-19, 2, -22)
       const b1 = world.createRigidBody(bd1)
       world.createCollider(RAPIER.ColliderDesc.cuboid(5, 2, 5).setFriction(0.5), b1)
     }
     {
-      const bd2 = RAPIER.RigidBodyDesc.fixed().setTranslation(-28, 1.5, -32)
+      const bd2 = RAPIER.RigidBodyDesc.fixed().setTranslation(-17, 1.5, -19)
       const b2 = world.createRigidBody(bd2)
       world.createCollider(RAPIER.ColliderDesc.cuboid(4, 1.5, 4).setFriction(0.5), b2)
     }
     {
-      const bd3 = RAPIER.RigidBodyDesc.fixed().setTranslation(-36, 1.25, -33)
+      const bd3 = RAPIER.RigidBodyDesc.fixed().setTranslation(-22, 1.25, -20)
       const b3 = world.createRigidBody(bd3)
       world.createCollider(RAPIER.ColliderDesc.cuboid(3, 1.25, 3).setFriction(0.5), b3)
     }
@@ -2043,7 +2043,7 @@ export function createWorld(scene, RAPIER, world) {
   // LANDMARK 2: LARGE CRATER at (-28, 28), radius ~8
   // ═══════════════════════════════════════════════════════════════════
   {
-    const CX = -28, CZ = 28, CR = 8
+    const CX = -17, CZ = 17, CR = 8
 
     // --- Crater rim: 12 box segments arranged in a circle ---
     for (let i = 0; i < 12; i++) {
@@ -2157,9 +2157,9 @@ export function createWorld(scene, RAPIER, world) {
 
     // --- 3 overlapping circles for irregular shape ---
     const pondDefs = [
-      { x: 30, z: 28, r: 4 },
-      { x: 32, z: 26, r: 2.5 },
-      { x: 28, z: 30, r: 2 },
+      { x: 18, z: 17, r: 4 },
+      { x: 19, z: 16, r: 2.5 },
+      { x: 17, z: 18, r: 2 },
     ]
     for (const p of pondDefs) {
       const pond = new THREE.Mesh(
@@ -2173,12 +2173,12 @@ export function createWorld(scene, RAPIER, world) {
     // --- Shoreline rocks ---
     const shoreRockGeo = new THREE.DodecahedronGeometry(1, 0)
     const shoreRockPositions = [
-      [26.5, 0.15, 28.5, 0.35],
-      [30, 0.15, 32.2, 0.4],
-      [34, 0.15, 25.5, 0.3],
-      [33.5, 0.15, 28, 0.5],
-      [27.5, 0.15, 30.5, 0.4],
-      [29, 0.15, 24.5, 0.35],
+      [15.9, 0.15, 17.1, 0.35],
+      [18, 0.15, 19.3, 0.4],
+      [20.4, 0.15, 15.3, 0.3],
+      [20.1, 0.15, 16.8, 0.5],
+      [16.5, 0.15, 18.3, 0.4],
+      [17.4, 0.15, 14.7, 0.35],
     ]
     for (const [sx, sy, sz, ss] of shoreRockPositions) {
       const rock = shadow(new THREE.Mesh(shoreRockGeo, mat(DARK_ROCK)))
@@ -2200,10 +2200,10 @@ export function createWorld(scene, RAPIER, world) {
     })
     goopAnims.push({ material: splatMat, phase: 1.0 })
     const splatDefs = [
-      { x: 26, z: 27, r: 0.8 },
-      { x: 34.5, z: 27.5, r: 0.6 },
-      { x: 29, z: 32, r: 1.0 },
-      { x: 31, z: 23.5, r: 0.5 },
+      { x: 15.6, z: 16.2, r: 0.8 },
+      { x: 20.7, z: 16.5, r: 0.6 },
+      { x: 17.4, z: 19.2, r: 1.0 },
+      { x: 18.6, z: 14.1, r: 0.5 },
     ]
     for (const sp of splatDefs) {
       const splat = new THREE.Mesh(
@@ -2217,8 +2217,8 @@ export function createWorld(scene, RAPIER, world) {
     // --- Bubble animation: 6 small spheres ---
     const bubbleMat = emissiveMat(0x00ff88, 0x00ff88, 0.6, { transparent: true, opacity: 0.5 })
     const bubbleDefs = [
-      { x: 30, z: 28 }, { x: 31, z: 27 }, { x: 29, z: 29 },
-      { x: 32, z: 26.5 }, { x: 28.5, z: 29.5 }, { x: 30.5, z: 28.5 },
+      { x: 18, z: 17 }, { x: 18.6, z: 16.2 }, { x: 17.4, z: 17.4 },
+      { x: 19.2, z: 15.9 }, { x: 17.1, z: 17.7 }, { x: 18.3, z: 17.1 },
     ]
     for (let i = 0; i < bubbleDefs.length; i++) {
       const bd = bubbleDefs[i]
@@ -2241,7 +2241,7 @@ export function createWorld(scene, RAPIER, world) {
   // LANDMARK 4: RESEARCH STATION at (28, -30)
   // ═══════════════════════════════════════════════════════════════════
   {
-    const RSX = 28, RSZ = -30
+    const RSX = 17, RSZ = -18
 
     // --- Main lab ---
     const lab = shadow(new THREE.Mesh(
@@ -2262,38 +2262,38 @@ export function createWorld(scene, RAPIER, world) {
     // --- Observation dome ---
     const domeBaseGeo = new THREE.CylinderGeometry(2, 2, 0.5, 16)
     const domeBase = shadow(new THREE.Mesh(domeBaseGeo, mat(STEEL)))
-    domeBase.position.set(33, 0.25, -28)
+    domeBase.position.set(20, 0.25, -17)
     group.add(domeBase)
 
     const domeGeo = new THREE.SphereGeometry(2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)
     const domeMesh = new THREE.Mesh(domeGeo, mat(LIGHT_BLUE, { transparent: true, opacity: 0.25 }))
-    domeMesh.position.set(33, 0.5, -28)
+    domeMesh.position.set(20, 0.5, -17)
     group.add(domeMesh)
 
     // --- Equipment shed ---
     const shed = shadow(new THREE.Mesh(
       new THREE.BoxGeometry(2, 2, 2), mat(DARK_GRAY)
     ))
-    shed.position.set(25, 1, -33)
+    shed.position.set(15, 1, -20)
     group.add(shed)
 
     // --- Antenna ---
     const antMast = shadow(new THREE.Mesh(
       new THREE.CylinderGeometry(0.06, 0.06, 5, 6), mat(STEEL)
     ))
-    antMast.position.set(30, 2.5, -33)
+    antMast.position.set(18, 2.5, -20)
     group.add(antMast)
     // 2 horizontal crossbars
     const crossbar1 = shadow(new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.04, 1.5, 4), mat(SILVER)
     ))
-    crossbar1.position.set(30, 3.5, -33)
+    crossbar1.position.set(18, 3.5, -20)
     crossbar1.rotation.z = Math.PI / 2
     group.add(crossbar1)
     const crossbar2 = shadow(new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.04, 1.0, 4), mat(SILVER)
     ))
-    crossbar2.position.set(30, 4.5, -33)
+    crossbar2.position.set(18, 4.5, -20)
     crossbar2.rotation.z = Math.PI / 2
     group.add(crossbar2)
 
@@ -2309,9 +2309,9 @@ export function createWorld(scene, RAPIER, world) {
     const walkway = shadow(new THREE.Mesh(
       new THREE.BoxGeometry(1.5, 0.1, 6), mat(STEEL)
     ))
-    // Position between lab (28,-30) and dome (33,-28)
-    walkway.position.set(30.5, 0.05, -29)
-    walkway.rotation.y = Math.atan2(33 - 28, -28 - (-30))
+    // Position between lab (17,-18) and dome (20,-17)
+    walkway.position.set(18.5, 0.05, -17.5)
+    walkway.rotation.y = Math.atan2(20 - 17, -17 - (-18))
     group.add(walkway)
 
     // --- Fixed Rapier colliders ---
@@ -2323,13 +2323,13 @@ export function createWorld(scene, RAPIER, world) {
     }
     {
       // Dome base
-      const domeBd = RAPIER.RigidBodyDesc.fixed().setTranslation(33, 1, -28)
+      const domeBd = RAPIER.RigidBodyDesc.fixed().setTranslation(20, 1, -17)
       const domeBody = world.createRigidBody(domeBd)
       world.createCollider(RAPIER.ColliderDesc.cylinder(1, 2).setFriction(0.5), domeBody)
     }
     {
       // Shed
-      const shedBd = RAPIER.RigidBodyDesc.fixed().setTranslation(25, 1, -33)
+      const shedBd = RAPIER.RigidBodyDesc.fixed().setTranslation(15, 1, -20)
       const shedBody = world.createRigidBody(shedBd)
       world.createCollider(RAPIER.ColliderDesc.cuboid(1, 1, 1).setFriction(0.5), shedBody)
     }
@@ -2340,7 +2340,7 @@ export function createWorld(scene, RAPIER, world) {
   // ═══════════════════════════════════════════════════════════════════
   {
     const roverGroup = new THREE.Group()
-    roverGroup.position.set(24, 0, -15)
+    roverGroup.position.set(14, 0, -9)
     roverGroup.rotation.y = 0.4
     roverGroup.rotation.z = 0.05  // tilted
 
@@ -2415,7 +2415,7 @@ export function createWorld(scene, RAPIER, world) {
         new THREE.BoxGeometry(0.25, 0.02, 8), mat(0x222230)
       ))
       // Tracks extend behind (positive local Z) at slight offset
-      track.position.set(24 + Math.cos(0.4) * s * 1.2, 0.01, -15 + Math.sin(0.4) * 4 + 4)
+      track.position.set(14 + Math.cos(0.4) * s * 1.2, 0.01, -9 + Math.sin(0.4) * 4 + 4)
       track.rotation.y = 0.4
       group.add(track)
     }
@@ -2424,7 +2424,7 @@ export function createWorld(scene, RAPIER, world) {
     {
       const halfA = 0.4 * 0.5
       const roverBd = RAPIER.RigidBodyDesc.fixed()
-        .setTranslation(24, 0.6, -15)
+        .setTranslation(14, 0.6, -9)
         .setRotation({ x: 0, y: Math.sin(halfA), z: 0, w: Math.cos(halfA) })
       const roverBody = world.createRigidBody(roverBd)
       world.createCollider(RAPIER.ColliderDesc.cuboid(1.25, 0.5, 1.75).setFriction(0.5), roverBody)

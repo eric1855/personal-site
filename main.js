@@ -33,7 +33,7 @@ const { RAPIER, world } = await createPhysicsEngine()
 // ── Rendering ───────────────────────────────────────────────────
 const { renderer } = createRenderer()
 const { scene }    = createScene()
-const { camera, update: updateCamera, shake: shakeCamera } = createCamera(window.innerWidth / window.innerHeight)
+const { camera, update: updateCamera, shake: shakeCamera, setLocations } = createCamera(window.innerWidth / window.innerHeight)
 
 // ── Asset loader + adaptive quality ─────────────────────────────
 initLoaders()
@@ -48,6 +48,7 @@ const { keys } = createInput()
 
 // ── Portfolio buildings (constant across all worlds) ─────────────
 const { locations, syncList: locationSyncList }  = createLocations(scene, RAPIER, world)
+setLocations(locations)
 createLabels(scene, locations)
 
 // ── World objects (ground, trees, paths, lampposts, rocks, etc.) ──
@@ -152,16 +153,19 @@ function loop(now) {
   const near = isPaused ? null : _findNearest(carState.position, locations)
   updateProximityPrompt(near)
   if (near && !prevNear) playProximitySound()
-  prevNear = near
 
   const triggered = keys.interact && !prevInteract
   prevInteract = keys.interact
-  if (triggered && near && !isPaused) {
+
+  // Open popup on E press OR on entering the building's proximity circle
+  const justEnteredCircle = near && !prevNear
+  if ((triggered || justEnteredCircle) && near && !isPaused) {
     isPaused = true
     popup.open(near)
     playPopupOpenSound()
     animatePopupOpen(near)
   }
+  prevNear = near
 
   // HUD updates: speedometer + minimap
   updateSpeedometer(carState.speed)

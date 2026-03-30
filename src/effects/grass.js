@@ -8,7 +8,7 @@ import * as THREE from 'three'
 
 /* ── Constants ──────────────────────────────────────────────── */
 
-const MAX_BLADES = 60000
+const MAX_BLADES = 120000
 
 // Cone geometry
 const CONE_RADIUS = 0.10
@@ -84,22 +84,28 @@ function _grassAcceptance(px, pz) {
     if (d < 6) n *= d / 6
   }
 
-  // Avoid new landmarks
-  // Mountain base (-32,-34, r=10)
-  const mDist = Math.sqrt((px+32)*(px+32) + (pz+34)*(pz+34))
+  // Avoid new landmarks (scaled 0.6x closer to center)
+  // Mountain base (-19,-20, r=10)
+  const mDist = Math.sqrt((px+19)*(px+19) + (pz+20)*(pz+20))
   if (mDist < 10) n *= mDist / 10
 
-  // Crater (-28, 28, r=9)
-  const cDist = Math.sqrt((px+28)*(px+28) + (pz-28)*(pz-28))
+  // Crater (-17, 17, r=9)
+  const cDist = Math.sqrt((px+17)*(px+17) + (pz-17)*(pz-17))
   if (cDist < 9) n *= cDist / 9
 
-  // Goop pond (30, 28, r=6)
-  const gDist = Math.sqrt((px-30)*(px-30) + (pz-28)*(pz-28))
+  // Goop pond (18, 17, r=6)
+  const gDist = Math.sqrt((px-18)*(px-18) + (pz-17)*(pz-17))
   if (gDist < 6) n *= gDist / 6
 
-  // Research station (28, -30, r=6)
-  const rDist = Math.sqrt((px-28)*(px-28) + (pz+30)*(pz+30))
+  // Research station (17, -18, r=6)
+  const rDist = Math.sqrt((px-17)*(px-17) + (pz+18)*(pz+18))
   if (rDist < 6) n *= rDist / 6
+
+  // Patchy grass reduction in center-right area
+  if (px > 5 && px < 25 && pz > -10 && pz < 10) {
+    const patchNoise = _noise2D(px * 0.3, pz * 0.3)
+    if (patchNoise > 0.4) n *= 0.3  // create holes in the grass
+  }
 
   return n
 }
