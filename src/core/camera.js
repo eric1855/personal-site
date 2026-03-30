@@ -13,9 +13,9 @@ const BUILDING_SMOOTH = 0.05  // transition speed into lock-on
 const SHAKE_DECAY = 0.88
 const SHAKE_FREQUENCY = 0.7
 
-// Building lock-on
+// Building lock-on — enter close, exit further (proper hysteresis)
 const LOCKON_ENTER_DIST = 9
-const LOCKON_EXIT_DIST = 8
+const LOCKON_EXIT_DIST = 13
 
 export function createCamera(aspect) {
   const camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000)
@@ -27,6 +27,8 @@ export function createCamera(aspect) {
 
   let _locations = []
   let _lockedBuilding = null
+  let _prevCarX = 0
+  let _prevCarZ = 0
 
   function setLocations(locations) {
     _locations = locations
@@ -48,22 +50,31 @@ export function createCamera(aspect) {
       }
     }
 
-    // Lock-on with hysteresis
+    // Lock-on with hysteresis + direction-of-travel
     if (_lockedBuilding) {
       const dx = carPos.x - _lockedBuilding.position.x
       const dz = carPos.z - _lockedBuilding.position.z
       const d = Math.sqrt(dx * dx + dz * dz)
-      if (d > LOCKON_EXIT_DIST) {
+
+      // Check if car is moving away from the building
+      const velX = carPos.x - _prevCarX
+      const velZ = carPos.z - _prevCarZ
+      const dot = dx * velX + dz * velZ  // positive = moving away
+
+      // Exit sooner if driving away, use full hysteresis if approaching
+      const exitDist = dot > 0.01 ? LOCKON_ENTER_DIST + 1 : LOCKON_EXIT_DIST
+      if (d > exitDist) {
         _lockedBuilding = null
       }
     } else if (nearestBuilding && nearestDist < LOCKON_ENTER_DIST) {
       _lockedBuilding = nearestBuilding
     }
 
+    _prevCarX = carPos.x
+    _prevCarZ = carPos.z
+
     if (_lockedBuilding) {
       // FIXED stationary camera — positioned above the building, looking down at it
-      // Camera does NOT move with the car. It stays at a fixed elevated point
-      // so the user always sees the car driving below.
       const bx = _lockedBuilding.position.x
       const bz = _lockedBuilding.position.z
 
