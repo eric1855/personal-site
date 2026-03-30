@@ -81,7 +81,7 @@ const { syncList: interactSyncList } = createInteractables(scene, RAPIER, world)
 worldSyncList.push(...interactSyncList)
 
 // ── HUD + popup ─────────────────────────────────────────────────
-const { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash } = createUI()
+const { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash, hideWasdHud } = createUI()
 const popup = createPopup(() => {
   isPaused = false
   justClosedPopup = true
@@ -151,6 +151,9 @@ function loop(now) {
 
   // Engine audio modulation
   updateAudioEngine(carState.speed)
+
+  // Hide WASD instructions once the user starts driving
+  if (Math.abs(carState.speed) > 0.01) hideWasdHud()
 
   // Proximity / interaction
   const near = isPaused ? null : _findNearest(carState.position, locations)

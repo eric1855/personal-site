@@ -20,7 +20,7 @@ No tests or linter configured. Verify changes by running `npm run build` — bui
 - **postprocessing** (pmndrs) for Bloom + Vignette
 - **troika-three-text** for SDF 3D text labels
 - **GSAP** for camera/UI animations
-- **Howler.js** for spatial audio
+- **Howler.js** for spatial audio (lofi background music in `public/assets/audio/lofi.mp3`)
 
 `vite.config.js` sets `base: '/personal-site/'` (GitHub Pages) and `target: 'esnext'` (top-level await).
 

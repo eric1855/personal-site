@@ -78,11 +78,12 @@ function _initSounds() {
     volume: 0.15,
   })
 
-  // Ambient background loop
+  // Lofi background music
+  const base = import.meta.env.BASE_URL ?? '/'
   _ambient = _safeHowl({
-    src: ['/assets/audio/ambient.webm', '/assets/audio/ambient.mp3'],
+    src: [`${base}assets/audio/lofi.mp3`],
     loop:   true,
-    volume: 0.12,
+    volume: 0.15,
   })
 }
 
@@ -221,8 +222,9 @@ export function setAmbient(worldName) {
   if (!_initialised) return
   try {
     if (_ambient) _ambient.stop()
+    const base = import.meta.env.BASE_URL ?? '/'
     _ambient = _safeHowl({
-      src: [`/assets/audio/ambient-${worldName}.webm`, `/assets/audio/ambient-${worldName}.mp3`],
+      src: [`${base}assets/audio/ambient-${worldName}.webm`, `${base}assets/audio/ambient-${worldName}.mp3`],
       loop:   true,
       volume: 0.12,
     })

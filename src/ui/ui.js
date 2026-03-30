@@ -50,6 +50,16 @@ export function createUI() {
       ">or Arrow Keys to drive</p>
     </div>
   `
+  const wasdHud = document.getElementById('wasd-hud')
+  wasdHud.style.transition = 'opacity 0.6s ease'
+  let wasdHidden = false
+
+  function hideWasdHud() {
+    if (wasdHidden) return
+    wasdHidden = true
+    wasdHud.style.opacity = '0'
+    setTimeout(() => wasdHud.remove(), 700)
+  }
 
   // ─── Proximity prompt ────────────────────────────────────────────────────
   const prompt = document.createElement('div')
@@ -158,21 +168,21 @@ export function createUI() {
   const minimapCanvas = document.createElement('canvas')
   minimapCanvas.width  = MINIMAP_SIZE * 2  // retina
   minimapCanvas.height = MINIMAP_SIZE * 2
-  minimapCanvas.style.width  = `${MINIMAP_SIZE}px`
-  minimapCanvas.style.height = `${MINIMAP_SIZE}px`
+  minimapCanvas.style.width  = '100%'
+  minimapCanvas.style.height = '100%'
   minimapWrap.appendChild(minimapCanvas)
   hud.appendChild(minimapWrap)
 
   // Minimap label (appears during intro animation)
   const minimapLabel = document.createElement('div')
-  minimapLabel.textContent = 'NAVIGATE TO BUILDINGS'
+  minimapLabel.textContent = 'MINIMAP'
   Object.assign(minimapLabel.style, {
     position:            'fixed',
     top:                 'calc(50% + 160px)',
     left:                '50%',
     transform:           'translateX(-50%)',
     fontFamily:          'monospace',
-    fontSize:            '14px',
+    fontSize:            '16px',
     letterSpacing:       '0.15em',
     color:               'rgba(255,255,255,0.7)',
     textTransform:       'uppercase',
@@ -389,7 +399,7 @@ export function createUI() {
     })
   }
 
-  return { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash }
+  return { updateProximityPrompt, updateSpeedometer, updateMinimap, waitForSplash, hideWasdHud }
 }
 
 // ── Private helpers ──────────────────────────────────────────────────────────
