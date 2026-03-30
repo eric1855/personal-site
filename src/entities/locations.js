@@ -51,6 +51,7 @@ const LOCATION_DEFS = [
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
             <h3 style="margin:0;font-size:1.05rem;color:#f5a623;">MinecraftLive</h3>
             <a href="https://github.com/eric1855/MinecraftLive" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;">GitHub &rarr;</a>
+            <a href="https://drive.google.com/file/d/104BanqN7PShnODy9gVDWJFy8xIF115ec/view?usp=sharing" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-decoration:none;margin-left:6px;padding:2px 8px;border:1px solid rgba(245,166,35,0.3);border-radius:4px;">Demo &rarr;</a>
           </div>
           <p style="margin:0 0 6px;font-size:0.9rem;">Play Minecraft with your body — no keyboard needed. Webcam tracks full-body pose via MediaPipe to detect gestures (pump arms to run, jump to jump, raise hands to click, T-pose for inventory). Phone gyroscope handles camera aiming over WebSocket. Built at Tartan Hacks 2026.</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
