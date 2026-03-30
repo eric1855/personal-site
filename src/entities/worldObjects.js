@@ -328,13 +328,13 @@ function _createLampposts(scene, RAPIER, world, syncList) {
 
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(p.x, 0, p.z)
-      .setLinearDamping(0.5)
-      .setAngularDamping(0.8)
+      .setLinearDamping(1.5)
+      .setAngularDamping(5.0)
     const body = world.createRigidBody(bodyDesc)
 
     const colDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
       .setTranslation(0, hy, 0)
-      .setDensity(3.0)
+      .setDensity(15.0)
       .setFriction(0.6)
       .setRestitution(0.05)
     world.createCollider(colDesc, body)
